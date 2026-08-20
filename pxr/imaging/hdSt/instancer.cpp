@@ -104,6 +104,11 @@ HdStInstancer::_SyncPrimvars(HdSceneDelegate *sceneDelegate,
     _hasDisplayOpacity = false;
     _hasNormals = false;
 
+    // Resolve the instancer's data source once for the per-primvar external-GPU
+    // lookups below, instead of re-traversing the terminal scene index per
+    // primvar name.
+    const HdContainerDataSourceHandle extPrimDs =
+        HdSt_GetPrimDataSource(sceneDelegate, instancerId);
     for (HdPrimvarDescriptor const& primvar: primvars) {
         // External GPU buffer fast path: consume the producer's shared handle
         // directly, bypassing the CPU value pull and (for instanceTransforms)
@@ -115,7 +120,7 @@ HdStInstancer::_SyncPrimvars(HdSceneDelegate *sceneDelegate,
         // uniformly.
         HdBufferSourceSharedPtr source = HdSt_TryCreateExtGpuBufferSource(
             primvar.name,
-            HdSt_GetExtGpuBufferSchema(sceneDelegate, instancerId, primvar.name),
+            HdSt_GetExtGpuBufferSchema(extPrimDs, primvar.name),
             resourceRegistry.get());
 
         if (!source) {

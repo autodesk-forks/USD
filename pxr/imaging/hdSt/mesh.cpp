@@ -1456,6 +1456,11 @@ HdStMesh::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
 
         // Track index to identify varying primvars.
         int i = 0;
+        // Resolve the prim's data source once so the per-primvar external-GPU
+        // lookup reads children off it, rather than re-traversing the terminal
+        // scene index for every primvar name.
+        const HdContainerDataSourceHandle extPrimDs =
+            HdSt_GetPrimDataSource(sceneDelegate, id);
         for (HdPrimvarDescriptor const& primvar: primvars) {
             if (!HdChangeTracker::IsPrimvarDirty(*dirtyBits, id, primvar.name)) {
                 continue;
@@ -1473,7 +1478,7 @@ HdStMesh::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
             if (HdBufferSourceSharedPtr extSource =
                     HdSt_TryCreateExtGpuBufferSource(
                         primvar.name,
-                        HdSt_GetExtGpuBufferSchema(sceneDelegate, id, primvar.name),
+                        HdSt_GetExtGpuBufferSchema(extPrimDs, primvar.name),
                         resourceRegistry.get())) {
                 if (primvar.name == HdTokens->points) {
                     _pointsDataType = extSource->GetTupleType().type;
@@ -1680,7 +1685,7 @@ HdStMesh::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
             HdBufferSourceSharedPtr source =
                 HdSt_TryCreateExtGpuBufferSource(
                     HdTokens->points,
-                    HdSt_GetExtGpuBufferSchema(sceneDelegate, id, HdTokens->points),
+                    HdSt_GetExtGpuBufferSchema(prim.dataSource, HdTokens->points),
                     resourceRegistry.get());
             if (!source && HdStIsPrimvarValidForDrawItem(
                 drawItem, HdTokens->points, value)) {
@@ -2128,6 +2133,11 @@ HdStMesh::_PopulateFaceVaryingPrimvars(HdSceneDelegate *sceneDelegate,
         }
     }
 
+    // Resolve the prim's data source once for the per-primvar external-GPU
+    // lookups below, instead of re-traversing the terminal scene index per
+    // primvar name.
+    const HdContainerDataSourceHandle extPrimDs =
+        HdSt_GetPrimDataSource(sceneDelegate, id);
     for (HdPrimvarDescriptor const& primvar: primvars) {
         if (primvar.name == HdTokens->points) {
             HF_VALIDATION_WARN(id, "facevarying-interpolation points!");
@@ -2152,7 +2162,7 @@ HdStMesh::_PopulateFaceVaryingPrimvars(HdSceneDelegate *sceneDelegate,
         if (HdBufferSourceSharedPtr extSource =
                 HdSt_TryCreateExtGpuBufferSource(
                     primvar.name,
-                    HdSt_GetExtGpuBufferSchema(sceneDelegate, id, primvar.name),
+                    HdSt_GetExtGpuBufferSchema(extPrimDs, primvar.name),
                     resourceRegistry.get())) {
             if (extSource->GetName() == HdTokens->normals) {
                 _sceneNormalsInterpolation = HdInterpolationFaceVarying;
@@ -2351,6 +2361,11 @@ HdStMesh::_PopulateElementPrimvars(HdSceneDelegate *sceneDelegate,
         // supports these, or if they need to be converted to floats.
         const bool doublesSupported = _GetDoubleSupport(resourceRegistry);
 
+        // Resolve the prim's data source once for the per-primvar external-GPU
+        // lookups below, instead of re-traversing the terminal scene index per
+        // primvar name.
+        const HdContainerDataSourceHandle extPrimDs =
+            HdSt_GetPrimDataSource(sceneDelegate, id);
         for (HdPrimvarDescriptor const& primvar: primvars) {
             if (primvar.name == HdTokens->points) {
                 HF_VALIDATION_WARN(id, "uniform-interpolation points!");
@@ -2366,7 +2381,7 @@ HdStMesh::_PopulateElementPrimvars(HdSceneDelegate *sceneDelegate,
             if (HdBufferSourceSharedPtr extSource =
                     HdSt_TryCreateExtGpuBufferSource(
                         primvar.name,
-                        HdSt_GetExtGpuBufferSchema(sceneDelegate, id, primvar.name),
+                        HdSt_GetExtGpuBufferSchema(extPrimDs, primvar.name),
                         resourceRegistry.get())) {
                 if (extSource->GetName() == HdTokens->normals) {
                     _sceneNormalsInterpolation = HdInterpolationUniform;

@@ -902,6 +902,11 @@ HdStBasisCurves::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
             &separateComputationSources,
             &computations);
 
+        // Resolve the prim's data source once for the per-primvar external-GPU
+        // lookups below, instead of re-traversing the terminal scene index per
+        // primvar name.
+        const HdContainerDataSourceHandle extPrimDs =
+            HdSt_GetPrimDataSource(sceneDelegate, id);
         for (HdPrimvarDescriptor const& primvar: primvars) {
             if (!HdChangeTracker::IsPrimvarDirty(*dirtyBits, id, primvar.name))
                 continue;
@@ -927,7 +932,7 @@ HdStBasisCurves::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
             // skip the CPU read + interpolation processing.
             if (HdBufferSourceSharedPtr ext = HdSt_TryCreateExtGpuBufferSource(
                     primvar.name,
-                    HdSt_GetExtGpuBufferSchema(sceneDelegate, id, primvar.name),
+                    HdSt_GetExtGpuBufferSchema(extPrimDs, primvar.name),
                     resourceRegistry.get())) {
                 sources.push_back(std::move(ext));
                 if (primvar.name == HdTokens->displayOpacity) {
@@ -1012,7 +1017,7 @@ HdStBasisCurves::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
             // External GPU buffer fast path for the points-only-dirty path.
             if (HdBufferSourceSharedPtr ext = HdSt_TryCreateExtGpuBufferSource(
                     HdTokens->points,
-                    HdSt_GetExtGpuBufferSchema(sceneDelegate, id, HdTokens->points),
+                    HdSt_GetExtGpuBufferSchema(prim.dataSource, HdTokens->points),
                     resourceRegistry.get())) {
                 sources.push_back(std::move(ext));
             } else if (HdStIsPrimvarValidForDrawItem(
@@ -1134,6 +1139,11 @@ HdStBasisCurves::_PopulateVaryingPrimvars(HdSceneDelegate *sceneDelegate,
     HdBufferSourceSharedPtrVector sources;
     sources.reserve(primvars.size());
 
+    // Resolve the prim's data source once for the per-primvar external-GPU
+    // lookups below, instead of re-traversing the terminal scene index per
+    // primvar name.
+    const HdContainerDataSourceHandle extPrimDs =
+        HdSt_GetPrimDataSource(sceneDelegate, id);
     for (HdPrimvarDescriptor const& primvar: primvars) {
         if (primvar.name == HdTokens->widths) {
             _basisWidthInterpolation = false;
@@ -1157,7 +1167,7 @@ HdStBasisCurves::_PopulateVaryingPrimvars(HdSceneDelegate *sceneDelegate,
         // External GPU buffer fast path.
         if (HdBufferSourceSharedPtr ext = HdSt_TryCreateExtGpuBufferSource(
                 primvar.name,
-                HdSt_GetExtGpuBufferSchema(sceneDelegate, id, primvar.name),
+                HdSt_GetExtGpuBufferSchema(extPrimDs, primvar.name),
                 resourceRegistry.get())) {
             sources.push_back(std::move(ext));
             if (primvar.name == HdTokens->displayOpacity) {
@@ -1258,6 +1268,11 @@ HdStBasisCurves::_PopulateElementPrimvars(HdSceneDelegate *sceneDelegate,
 
     const size_t numCurves = _topology ? _topology->GetNumCurves() : 0;
 
+    // Resolve the prim's data source once for the per-primvar external-GPU
+    // lookups below, instead of re-traversing the terminal scene index per
+    // primvar name.
+    const HdContainerDataSourceHandle extPrimDs =
+        HdSt_GetPrimDataSource(sceneDelegate, id);
     for (HdPrimvarDescriptor const& primvar: uniformPrimvars) {
         if (primvar.name == HdTokens->points) {
             HF_VALIDATION_WARN(id, "uniform-interpolation points!");
@@ -1271,7 +1286,7 @@ HdStBasisCurves::_PopulateElementPrimvars(HdSceneDelegate *sceneDelegate,
         // External GPU buffer fast path.
         if (HdBufferSourceSharedPtr ext = HdSt_TryCreateExtGpuBufferSource(
                 primvar.name,
-                HdSt_GetExtGpuBufferSchema(sceneDelegate, id, primvar.name),
+                HdSt_GetExtGpuBufferSchema(extPrimDs, primvar.name),
                 resourceRegistry.get())) {
             sources.push_back(std::move(ext));
             if (primvar.name == HdTokens->displayOpacity) {

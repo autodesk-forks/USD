@@ -28,11 +28,31 @@ class HdStResourceRegistry;
 /// that turn a producer-published HdExtGpuBufferSchema on a primvar into a
 /// Storm buffer source / zero-copy alias BAR. See external_gpu_buffer_proposal.
 
-/// Fetch the HdExtGpuBufferSchema (if any) for primvar \p name off the prim's
-/// container data source in the terminal scene index. Returns an undefined
-/// schema when the prim / primvar / extGpuBuffer child is absent (e.g. a legacy
-/// scene delegate that never authors it) — the caller treats that as "no
-/// external buffer, use the CPU path".
+/// Resolve the prim \p id's container data source from the terminal scene
+/// index. Hoist this out of per-primvar loops (it does the one scene-index
+/// traversal) and feed the result to the overload below, so a prim with N dirty
+/// primvars pays for one GetPrim instead of N. Returns null when there is no
+/// terminal scene index.
+HDST_API
+HdContainerDataSourceHandle
+HdSt_GetPrimDataSource(
+    HdSceneDelegate *sceneDelegate,
+    SdfPath const &id);
+
+/// Fetch the HdExtGpuBufferSchema (if any) for primvar \p name off an already
+/// resolved prim \p primDataSource (see HdSt_GetPrimDataSource). Returns an
+/// undefined schema when the prim / primvar / extGpuBuffer child is absent (a
+/// null \p primDataSource included) — the caller treats that as "no external
+/// buffer, use the CPU path".
+HDST_API
+HdExtGpuBufferSchema
+HdSt_GetExtGpuBufferSchema(
+    HdContainerDataSourceHandle const &primDataSource,
+    TfToken const &name);
+
+/// Convenience overload that resolves the prim data source itself. Prefer the
+/// two-argument form inside loops over a prim's primvars to avoid re-traversing
+/// the terminal scene index per primvar name.
 HDST_API
 HdExtGpuBufferSchema
 HdSt_GetExtGpuBufferSchema(

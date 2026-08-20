@@ -97,21 +97,40 @@ _ResolveSemaphore(
         kindDs ? kindDs->GetTypedValue(0.0f) : TfToken());
 }
 
+HdContainerDataSourceHandle
+HdSt_GetPrimDataSource(
+    HdSceneDelegate *sceneDelegate,
+    SdfPath const &id)
+{
+    HdSceneIndexBaseRefPtr si =
+        sceneDelegate->GetRenderIndex().GetTerminalSceneIndex();
+    if (!si) {
+        return nullptr;
+    }
+    return si->GetPrim(id).dataSource;
+}
+
+HdExtGpuBufferSchema
+HdSt_GetExtGpuBufferSchema(
+    HdContainerDataSourceHandle const &primDataSource,
+    TfToken const &name)
+{
+    if (!primDataSource) {
+        return HdExtGpuBufferSchema(nullptr);
+    }
+    const HdPrimvarSchema pv =
+        HdPrimvarsSchema::GetFromParent(primDataSource).GetPrimvar(name);
+    return HdExtGpuBufferSchema::GetFromParent(pv.GetContainer());
+}
+
 HdExtGpuBufferSchema
 HdSt_GetExtGpuBufferSchema(
     HdSceneDelegate *sceneDelegate,
     SdfPath const &id,
     TfToken const &name)
 {
-    HdSceneIndexBaseRefPtr si =
-        sceneDelegate->GetRenderIndex().GetTerminalSceneIndex();
-    if (!si) {
-        return HdExtGpuBufferSchema(nullptr);
-    }
-    const HdContainerDataSourceHandle primDs = si->GetPrim(id).dataSource;
-    const HdPrimvarSchema pv =
-        HdPrimvarsSchema::GetFromParent(primDs).GetPrimvar(name);
-    return HdExtGpuBufferSchema::GetFromParent(pv.GetContainer());
+    return HdSt_GetExtGpuBufferSchema(
+        HdSt_GetPrimDataSource(sceneDelegate, id), name);
 }
 
 HdBufferSourceSharedPtr

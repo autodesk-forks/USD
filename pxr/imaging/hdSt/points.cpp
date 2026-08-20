@@ -287,6 +287,11 @@ HdStPoints::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
         &separateComputationSources,
         &computations);
 
+    // Resolve the prim's data source once for the per-primvar external-GPU
+    // lookups below, instead of re-traversing the terminal scene index per
+    // primvar name.
+    const HdContainerDataSourceHandle extPrimDs =
+        HdSt_GetPrimDataSource(sceneDelegate, id);
     for (HdPrimvarDescriptor const& primvar: primvars) {
         if (!HdChangeTracker::IsPrimvarDirty(*dirtyBits, id, primvar.name)) {
             continue;
@@ -299,7 +304,7 @@ HdStPoints::_PopulateVertexPrimvars(HdSceneDelegate *sceneDelegate,
         // read + validity check.
         if (HdBufferSourceSharedPtr ext = HdSt_TryCreateExtGpuBufferSource(
                 primvar.name,
-                HdSt_GetExtGpuBufferSchema(sceneDelegate, id, primvar.name),
+                HdSt_GetExtGpuBufferSchema(extPrimDs, primvar.name),
                 resourceRegistry.get())) {
             sources.push_back(std::move(ext));
             if (primvar.name == HdTokens->displayOpacity) {
