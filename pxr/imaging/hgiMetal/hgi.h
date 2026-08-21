@@ -69,9 +69,6 @@ public:
     HgiRayTracingCmdsUniquePtr CreateRayTracingCmds() override;
 
     HGIMETAL_API
-    HgiTextureHandle CreateTexture(HgiTextureDesc const & desc) override;
-
-    HGIMETAL_API
     void DestroyTexture(HgiTextureHandle* texHandle) override;
 
     HGIMETAL_API

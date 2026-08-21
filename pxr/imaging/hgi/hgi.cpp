@@ -120,10 +120,21 @@ Hgi::CreateResourceBindings(HgiResourceBindingsDesc const& desc)
         HGI_TEST_CODING_ERROR(
             bufDesc.resourceType == HgiBindResourceTypeUniformBuffer ||
             bufDesc.resourceType == HgiBindResourceTypeStorageBuffer ||
-            bufDesc.resourceType == HgiBindResourceTypeTessFactors,
+            bufDesc.resourceType == HgiBindResourceTypeTessFactors ||
+            bufDesc.resourceType == HgiBindResourceTypeAccelerationStructure,
             "%s.buffers[%u]: Unknown buffer type to bind",
                 NOT_EMPTY_NAME(desc.debugName), i);
-        
+
+        // Acceleration structures don't use offset/size validation.
+        if (bufDesc.resourceType == HgiBindResourceTypeAccelerationStructure) {
+            for (uint32_t j = 0; j < bufDesc.buffers.size(); j++) {
+                HGI_TEST_CODING_ERROR(bufDesc.buffers[j],
+                    "%s.buffers[%u].buffers[%u] invalid",
+                        NOT_EMPTY_NAME(desc.debugName), i, j);
+            }
+            continue;
+        }
+
         uint32_t const offset = bufDesc.offsets.front();
         uint32_t const size = bufDesc.sizes.empty() ? 0 : bufDesc.sizes.front();
         HGI_TEST_CODING_ERROR(size != 0 || offset == 0,
