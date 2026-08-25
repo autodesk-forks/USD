@@ -49,7 +49,7 @@ void
 HgiVulkanAccelerationStructureCmds::PushDebugGroup(const char* label)
 {
     _CreateCommandBuffer();
-    HgiVulkanBeginLabel(_hgi->GetPrimaryDevice(), _commandBuffer, label);
+    HgiVulkanBeginLabel(_hgi->GetPrimaryDevice(), _commandBuffer, label, GfVec4f(1.0f));
 }
 
 void

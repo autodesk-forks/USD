@@ -11,6 +11,9 @@
 #include "pxr/imaging/hgiVulkan/graphicsPipeline.h"
 #include "pxr/imaging/hgiVulkan/hgi.h"
 #include "pxr/imaging/hgiVulkan/resourceBindings.h"
+
+#include <algorithm>
+#include <unordered_map>
 #include "pxr/imaging/hgiVulkan/sampler.h"
 #include "pxr/imaging/hgiVulkan/shaderFunction.h"
 #include "pxr/imaging/hgiVulkan/shaderProgram.h"
@@ -50,18 +53,27 @@ std::vector<HgiVulkanAccelerationStructureGeometryVector*>
 template<class T>
 static void _EmptyTrash(
     std::vector<std::vector<T*>*>* list,
-    VkDevice vkDevice,
+    HgiVulkanDevice* device,
     uint64_t queueInflightBits)
 {
-    // Loop the garbage vectors of each thread
-    for (auto vec : *list) {
+    // Loop the garbage vectors of each thread. Indexed rather than range-for: deleting an
+    // object below can register a new per-thread vector in *list, which would invalidate a
+    // range-for iterator mid-loop.
+    for (size_t listIdx = 0; listIdx < list->size(); ++listIdx) {
+        std::vector<T*>* vec = (*list)[listIdx];
         for (size_t i=vec->size(); i-- > 0;) {
             T* object = (*vec)[i];
 
             // Each device has its own queue, so its own set of inflight bits.
             // We must only destroy objects that belong to this device & queue.
-            // (The garbage collector collects objects from all devices)
-            if (vkDevice != object->GetDevice()->GetVulkanDevice()) {
+            // (The garbage collector collects objects from all devices.)
+            //
+            // Compare the device *pointers* rather than the VkDevice handles. The thread local
+            // trash vectors are shared by every Hgi in the process, so this list can hold
+            // objects belonging to a device that has already been destroyed; reaching through
+            // such an object to call GetVulkanDevice() on it is a use-after-free, and it
+            // crashed whenever a second Hgi was created (as the unit tests do per test case).
+            if (device != object->GetDevice()) {
                 continue;
             }
 
@@ -81,7 +93,31 @@ HgiVulkanGarbageCollector::HgiVulkanGarbageCollector(HgiVulkan* hgi)
 {
 }
 
-HgiVulkanGarbageCollector::~HgiVulkanGarbageCollector() = default;
+HgiVulkanGarbageCollector::~HgiVulkanGarbageCollector()
+{
+    // Free the per-thread vectors this collector owns. Their contents were emptied by the final
+    // PerformGarbageCollection; what is released here is just the vectors themselves, which were
+    // previously leaked. Other threads may still hold a cached pointer to one of these, which is
+    // why _GetThreadLocalStorageList re-checks that a cached list is still registered with the
+    // collector it is asking about before returning it -- that check only compares pointers.
+    auto deleteLists = [](auto& lists) {
+        for (auto* list : lists) {
+            delete list;
+        }
+        lists.clear();
+    };
+    deleteLists(_bufferList);
+    deleteLists(_textureList);
+    deleteLists(_samplerList);
+    deleteLists(_shaderFunctionList);
+    deleteLists(_shaderProgramList);
+    deleteLists(_resourceBindingsList);
+    deleteLists(_graphicsPipelineList);
+    deleteLists(_computePipelineList);
+    deleteLists(_accelerationStructureList);
+    deleteLists(_accelerationStructureGeometryList);
+    deleteLists(_rayTracingPipelineList);
+}
 
 /* Multi threaded */
 HgiVulkanBufferVector*
@@ -195,19 +231,17 @@ HgiVulkanGarbageCollector::PerformGarbageCollection(HgiVulkanDevice* device)
     // Check what command buffers are in-flight on the device queue.
     HgiVulkanCommandQueue* queue = device->GetCommandQueue();
     uint64_t queueBits = queue->GetInflightCommandBuffersBits();
-    VkDevice vkDevice = device->GetVulkanDevice();
-
-    _EmptyTrash(&_bufferList, vkDevice, queueBits);
-    _EmptyTrash(&_textureList, vkDevice, queueBits);
-    _EmptyTrash(&_samplerList, vkDevice, queueBits);
-    _EmptyTrash(&_shaderFunctionList, vkDevice, queueBits);
-    _EmptyTrash(&_shaderProgramList, vkDevice, queueBits);
-    _EmptyTrash(&_resourceBindingsList, vkDevice, queueBits);
-    _EmptyTrash(&_graphicsPipelineList, vkDevice, queueBits);
-    _EmptyTrash(&_computePipelineList, vkDevice, queueBits);
-    _EmptyTrash(&_accelerationStructureList, vkDevice, queueBits);
-    _EmptyTrash(&_accelerationStructureGeometryList, vkDevice, queueBits);
-    _EmptyTrash(&_rayTracingPipelineList, vkDevice, queueBits);
+    _EmptyTrash(&_bufferList, device, queueBits);
+    _EmptyTrash(&_textureList, device, queueBits);
+    _EmptyTrash(&_samplerList, device, queueBits);
+    _EmptyTrash(&_shaderFunctionList, device, queueBits);
+    _EmptyTrash(&_shaderProgramList, device, queueBits);
+    _EmptyTrash(&_resourceBindingsList, device, queueBits);
+    _EmptyTrash(&_graphicsPipelineList, device, queueBits);
+    _EmptyTrash(&_computePipelineList, device, queueBits);
+    _EmptyTrash(&_accelerationStructureList, device, queueBits);
+    _EmptyTrash(&_accelerationStructureGeometryList, device, queueBits);
+    _EmptyTrash(&_rayTracingPipelineList, device, queueBits);
 
     _isDestroying = false;
 }
@@ -216,24 +250,44 @@ template<class T>
 T* HgiVulkanGarbageCollector::_GetThreadLocalStorageList(std::vector<T*>* collector)
 {
     if (ARCH_UNLIKELY(_isDestroying)) {
-        TF_CODING_ERROR("Cannot destroy object during garbage collection ");
-        while(_isDestroying);
+        // This used to spin on _isDestroying, which deadlocks outright whenever the thread
+        // asking is the thread collecting -- exactly what happens when an object destroyed from
+        // _EmptyTrash queues another object. Appending here is safe: the outer loop is indexed
+        // and the inner loop walks backwards, so anything added now is simply collected on the
+        // next pass.
+        TF_CODING_ERROR("Object queued for destruction during garbage collection; it will be "
+                        "collected on the next pass.");
     }
 
-    // Only lock and create a new garbage vector if we dont have one in TLS.
-    // Using TLS means this we store per type T, not per T and Hgi instance.
-    // So if you call garbage collect on one Hgi, it destroys objects across
-    // all Hgi's. This should be ok since we only call the destructor of the
-    // garbage object.
-    thread_local T* _tls = nullptr;
+    // One vector per (collector, thread). This used to be a single function-local
+    // `thread_local T*`, which is shared by *every* collector on the thread: the first Hgi to ask
+    // created and registered the vector, and every later Hgi silently reused it without
+    // registering it. Those later objects were therefore queued onto a list no live collector
+    // ever empties -- they are never destroyed, and VMA asserts that allocations outlived the
+    // allocator as soon as the second Hgi tears its device down. A unit test binary creates one
+    // Hgi per test, so this fires almost immediately; usdview creates one and never sees it.
+    thread_local std::unordered_map<void*, T*> _tls;
     static std::mutex garbageMutex;
 
-    if (!_tls) {
-        _tls = new T();
+    auto it = _tls.find(collector);
+    if (it != _tls.end()) {
+        // A collector allocated at a recycled address would otherwise be handed the previous
+        // owner's freed vector, so confirm the cached list is still registered here. This only
+        // ever compares pointers; it never dereferences a stale one.
         std::lock_guard<std::mutex> guard(garbageMutex);
-        collector->push_back(_tls);
+        if (std::find(collector->begin(), collector->end(), it->second) != collector->end()) {
+            return it->second;
+        }
+        _tls.erase(it);
     }
-    return _tls;
+
+    T* list = new T();
+    {
+        std::lock_guard<std::mutex> guard(garbageMutex);
+        collector->push_back(list);
+    }
+    _tls[collector] = list;
+    return list;
 }
 
 

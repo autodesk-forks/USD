@@ -109,6 +109,15 @@ HgiVulkanResourceBindings::HgiVulkanResourceBindings(
         HgiVulkanConversions::GetShaderStages(
             HgiShaderStageGeometry | HgiShaderStageFragment);
 
+    // Ray tracing pipelines do not go through spirv-reflect: HgiVulkanRayTracingPipeline builds
+    // its descriptor set layout straight from the caller's
+    // HgiRayTracingPipelineDescriptorSetLayoutDesc, using the caller's stage usage verbatim.
+    // Overspecifying the stages below would make that layout and this one differ, and two
+    // descriptor set layouts must be identically defined to be compatible.
+    constexpr HgiShaderStage rayTracingStages = HgiShaderStageRayGen | HgiShaderStageAnyHit |
+        HgiShaderStageClosestHit | HgiShaderStageMiss | HgiShaderStageIntersection |
+        HgiShaderStageCallable;
+
     // Create DescriptorSetLayout to describe resource bindings.
     //
     std::vector<VkDescriptorSetLayoutBinding> bindings;
@@ -137,7 +146,8 @@ HgiVulkanResourceBindings::HgiVulkanResourceBindings(
             HgiVulkanConversions::GetDescriptorType(b.resourceType);
         poolSizes[b.resourceType].descriptorCount++;
         d.descriptorCount = static_cast<uint32_t>(b.buffers.size());
-        d.stageFlags = (b.stageUsage == HgiShaderStageCompute) ?
+        d.stageFlags = (b.stageUsage == HgiShaderStageCompute ||
+                        (b.stageUsage & rayTracingStages)) ?
             HgiVulkanConversions::GetShaderStages(b.stageUsage) :
             bufferShaderStageFlags;
         d.pImmutableSamplers = nullptr;
@@ -157,7 +167,8 @@ HgiVulkanResourceBindings::HgiVulkanResourceBindings(
             HgiVulkanConversions::GetDescriptorType(t.resourceType);
         poolSizes[t.resourceType].descriptorCount++;
         d.descriptorCount = static_cast<uint32_t>(descriptorCount);
-        d.stageFlags = (t.stageUsage == HgiShaderStageCompute) ?
+        d.stageFlags = (t.stageUsage == HgiShaderStageCompute ||
+                        (t.stageUsage & rayTracingStages)) ?
             HgiVulkanConversions::GetShaderStages(t.stageUsage) :
             textureShaderStageFlags;
         d.pImmutableSamplers = nullptr;
@@ -343,7 +354,9 @@ HgiVulkanResourceBindings::HgiVulkanResourceBindings(
     size_t bufInfoOffset = 0;
     for (HgiBufferBindDesc const& bufDesc : desc.buffers) {
         VkWriteDescriptorSet writeSet= {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-        writeSet.dstBinding = bufDesc.bindingIndex;
+        // Must match the layout built above, which offsets buffers past the acceleration
+        // structures.
+        writeSet.dstBinding = bufferBindIndexStart + bufDesc.bindingIndex;
         writeSet.dstArrayElement = 0;
         writeSet.descriptorCount = static_cast<uint32_t>(bufDesc.buffers.size()); // 0 ok
         writeSet.dstSet = _vkDescriptorSet;

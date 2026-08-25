@@ -112,10 +112,6 @@ public:
     HGIVULKAN_API
     HgiVulkanMappedBufferUniquePointer Map() const;
 
-    /// Returns the Vk device address for this buffer (for ray tracing).
-    HGIVULKAN_API
-    uint64_t GetDeviceAddress() const;
-
 protected:
     friend class HgiVulkan;
 

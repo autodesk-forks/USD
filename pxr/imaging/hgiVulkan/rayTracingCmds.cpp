@@ -50,7 +50,7 @@ void
 HgiVulkanRayTracingCmds::PushDebugGroup(const char* label)
 {
     _CreateCommandBuffer();
-    HgiVulkanBeginLabel(_hgi->GetPrimaryDevice(), _commandBuffer, label);
+    HgiVulkanBeginLabel(_hgi->GetPrimaryDevice(), _commandBuffer, label, GfVec4f(1.0f));
 }
 
 void
@@ -112,10 +112,16 @@ void
     missShaderSbtEntry.stride = shaderBindingTable.missShaderBindingTableStride;
     missShaderSbtEntry.size = pMissShaderBindingTableBufferVk->GetDescriptor().byteSize;
 
+    // A pipeline for a scene with no geometry has no hit groups, and gets a placeholder buffer
+    // because Hgi cannot create a zero sized one. Vulkan wants an all-zero region in that case.
     VkStridedDeviceAddressRegionKHR hitShaderSbtEntry{};
-    hitShaderSbtEntry.deviceAddress = pHitShaderBindingTableBufferVk->GetDeviceAddress();
-    hitShaderSbtEntry.stride = shaderBindingTable.hitShaderBindingTableStride;
-    hitShaderSbtEntry.size = pHitShaderBindingTableBufferVk->GetDescriptor().byteSize;
+    const uint32_t hitStride = shaderBindingTable.hitShaderBindingTableStride;
+    const size_t hitTableSize = pHitShaderBindingTableBufferVk->GetDescriptor().byteSize;
+    if (hitStride > 0 && hitTableSize >= hitStride) {
+        hitShaderSbtEntry.deviceAddress = pHitShaderBindingTableBufferVk->GetDeviceAddress();
+        hitShaderSbtEntry.stride = hitStride;
+        hitShaderSbtEntry.size = hitTableSize;
+    }
 
     VkStridedDeviceAddressRegionKHR callableShaderSbtEntry{};
 

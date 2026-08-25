@@ -346,6 +346,11 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
         {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
     vulkan12Features.timelineSemaphore =
         _capabilities->vkVulkan12Features.timelineSemaphore;
+    // Required by the ray tracing / acceleration structure extensions chained in below.
+    vulkan12Features.bufferDeviceAddress = true;
+    vulkan12Features.descriptorIndexing = true;
+    vulkan12Features.runtimeDescriptorArray = true;
+    vulkan12Features.shaderSampledImageArrayNonUniformIndexing = true;
     vulkan12Features.pNext = features2.pNext;
     features2.pNext = &vulkan12Features;
 
@@ -395,30 +400,24 @@ HgiVulkanDevice::HgiVulkanDevice(HgiVulkanInstance* instance)
         features2.pNext = &hostImageCopyFeatures;
     }
 
-    VkPhysicalDeviceVulkan12Features vulkan12Features = {};
-    vulkan12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-    vulkan12Features.bufferDeviceAddress = true;
-    vulkan12Features.timelineSemaphore = true;
-    vulkan12Features.descriptorIndexing = true;
-    vulkan12Features.runtimeDescriptorArray = true;
-    vulkan12Features.shaderSampledImageArrayNonUniformIndexing = true;
-
-    vulkan12Features.pNext = &features2;
-
     VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures;
     rayTracingPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
     rayTracingPipelineFeatures.rayTracingPipelineTraceRaysIndirect = VK_FALSE;
     rayTracingPipelineFeatures.rayTracingPipelineShaderGroupHandleCaptureReplay = VK_FALSE;
     rayTracingPipelineFeatures.rayTracingPipelineShaderGroupHandleCaptureReplayMixed = VK_FALSE;
     rayTracingPipelineFeatures.rayTraversalPrimitiveCulling = VK_FALSE;
-    rayTracingPipelineFeatures.pNext = &vulkan12Features;
+    rayTracingPipelineFeatures.pNext = &features2;
     rayTracingPipelineFeatures.rayTracingPipeline = VK_TRUE;
 
     VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures;
     accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
     accelerationStructureFeatures.pNext = &rayTracingPipelineFeatures;
     accelerationStructureFeatures.accelerationStructure = VK_TRUE;
-    accelerationStructureFeatures.accelerationStructureCaptureReplay = VK_TRUE;
+    // Only needed by capture/replay tools, and requesting it unconditionally makes
+    // vkCreateDevice fail with VK_ERROR_FEATURE_NOT_PRESENT on every device that lacks it --
+    // Mesa's lavapipe, for one, which is the only Vulkan device available under WSL. The
+    // equivalent ray tracing pipeline capture-replay flags above are already VK_FALSE.
+    accelerationStructureFeatures.accelerationStructureCaptureReplay = VK_FALSE;
     accelerationStructureFeatures.accelerationStructureIndirectBuild = VK_FALSE;
     accelerationStructureFeatures.accelerationStructureHostCommands = VK_FALSE;
     accelerationStructureFeatures.descriptorBindingAccelerationStructureUpdateAfterBind = VK_FALSE;

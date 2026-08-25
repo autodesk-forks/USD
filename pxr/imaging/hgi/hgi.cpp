@@ -152,6 +152,7 @@ Hgi::CreateResourceBindings(HgiResourceBindingsDesc const& desc)
         const HgiTextureBindDesc& texDesc = desc.textures[i];
 
         HGI_TEST_CODING_ERROR(
+            texDesc.resourceType == HgiBindResourceTypeSampler ||
             texDesc.resourceType == HgiBindResourceTypeSampledImage ||
             texDesc.resourceType == HgiBindResourceTypeCombinedSamplerImage ||
             texDesc.resourceType == HgiBindResourceTypeStorageImage,

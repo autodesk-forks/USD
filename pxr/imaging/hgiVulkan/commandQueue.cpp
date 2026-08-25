@@ -445,18 +445,11 @@ HgiVulkanCommandQueue::_ReleaseInflightBit(HgiVulkan_CommandPool* pool, uint8_t 
         while (!_inflightBits.compare_exchange_weak(
             expect, expect | (1ULL<<id))) 
         {
-            // Get the fence objects for any in-flight buffers in this thread's pool with this ID.
-            std::vector<VkFence> fences;
+            // Wait for any in-flight buffer in this thread's pool that holds this ID.
             for (HgiVulkanCommandBuffer* cb : pool->commandBuffers) {
                 if (cb->IsInFlight() && cb->GetInflightId()==id) {
-                    fences.push_back(cb->GetVulkanFence());
+                    cb->UpdateInFlightStatus(HgiSubmitWaitTypeWaitUntilCompleted);
                 }
-            }
-
-            // Wait for the fences.
-            if (fences.size()) {
-                static const uint64_t timeOut = 1000000;
-                vkWaitForFences(_device->GetVulkanDevice(), fences.size(), fences.data(), VK_TRUE, timeOut);
             }
 
             // Reset the consumed buffers after waiting.

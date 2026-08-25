@@ -313,24 +313,26 @@ void HgiVulkanRayTracingPipeline::BuildShaderBindingTable() {
     HgiBufferDesc raygenShaderBindingTableBufferDesc;
     raygenShaderBindingTableBufferDesc.debugName = _descriptor.debugName + " Raygen Shader Binding Table";
     raygenShaderBindingTableBufferDesc.usage = HgiBufferUsageShaderBindingTable | HgiBufferUsageRayTracingExtensions | HgiBufferUsageShaderDeviceAddress;
-    raygenShaderBindingTableBufferDesc.byteSize = rayGenShaderHandleStorage.size();
-    raygenShaderBindingTableBufferDesc.initialData = rayGenShaderHandleStorage.data();
+    // A pipeline can have no hit groups when the scene is empty; Hgi rejects a zero
+    // sized buffer, so keep a one byte placeholder and leave it uninitialised.
+    raygenShaderBindingTableBufferDesc.byteSize = rayGenShaderHandleStorage.empty() ? 1 : rayGenShaderHandleStorage.size();
+    raygenShaderBindingTableBufferDesc.initialData = rayGenShaderHandleStorage.empty() ? nullptr : rayGenShaderHandleStorage.data();
     _shaderBindingTable.raygenShaderBindingTable = _pHgi->CreateBuffer(raygenShaderBindingTableBufferDesc);
     _shaderBindingTable.raygenShaderBindingTableStride = rayGenStride;
 
     HgiBufferDesc missShaderBindingTableBufferDesc;
     missShaderBindingTableBufferDesc.debugName = _descriptor.debugName + " Miss Shader Binding Table";
     missShaderBindingTableBufferDesc.usage = HgiBufferUsageShaderBindingTable | HgiBufferUsageRayTracingExtensions | HgiBufferUsageShaderDeviceAddress;
-    missShaderBindingTableBufferDesc.byteSize = missShaderHandleStorage.size();
-    missShaderBindingTableBufferDesc.initialData = missShaderHandleStorage.data();
+    missShaderBindingTableBufferDesc.byteSize = missShaderHandleStorage.empty() ? 1 : missShaderHandleStorage.size();
+    missShaderBindingTableBufferDesc.initialData = missShaderHandleStorage.empty() ? nullptr : missShaderHandleStorage.data();
     _shaderBindingTable.missShaderBindingTable = _pHgi->CreateBuffer(missShaderBindingTableBufferDesc);
     _shaderBindingTable.missShaderBindingTableStride = missStride;
 
     HgiBufferDesc closestHitShaderBindingTableBufferDesc;
     closestHitShaderBindingTableBufferDesc.debugName = _descriptor.debugName + " Hit Shader Binding Table";
     closestHitShaderBindingTableBufferDesc.usage = HgiBufferUsageShaderBindingTable | HgiBufferUsageRayTracingExtensions | HgiBufferUsageShaderDeviceAddress;
-    closestHitShaderBindingTableBufferDesc.byteSize = hitShaderHandleStorage.size();;
-    closestHitShaderBindingTableBufferDesc.initialData = hitShaderHandleStorage.data();
+    closestHitShaderBindingTableBufferDesc.byteSize = hitShaderHandleStorage.empty() ? 1 : hitShaderHandleStorage.size();
+    closestHitShaderBindingTableBufferDesc.initialData = hitShaderHandleStorage.empty() ? nullptr : hitShaderHandleStorage.data();
     _shaderBindingTable.hitShaderBindingTable = _pHgi->CreateBuffer(closestHitShaderBindingTableBufferDesc);
     _shaderBindingTable.hitShaderBindingTableStride = hitStride;
 }

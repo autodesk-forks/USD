@@ -86,8 +86,13 @@ HgiVulkanAccelerationStructureGeometry::HgiVulkanAccelerationStructureGeometry(H
     HgiBufferDesc instancesBufferDesc;
     instancesBufferDesc.debugName = desc.debugName + "InstancesBuffer";
     instancesBufferDesc.usage = HgiBufferUsageAccelerationStructureBuildInputReadOnly | HgiBufferUsageRayTracingExtensions | HgiBufferUsageShaderDeviceAddress;
-    instancesBufferDesc.initialData = &instances[0];
-    instancesBufferDesc.byteSize = instances.size()*sizeof(instances[0]);
+    // A scene can legitimately contain no instances (an empty scene, or one whose render buffer
+    // was released first). Hgi rejects a zero sized buffer, and &instances[0] on an empty vector
+    // is undefined behaviour, so allocate room for one unused instance in that case; the build
+    // below still reports the real instance count.
+    instancesBufferDesc.initialData = instances.empty() ? nullptr : instances.data();
+    instancesBufferDesc.byteSize =
+        (instances.empty() ? 1 : instances.size()) * sizeof(VkAccelerationStructureInstanceKHR);
     _instancesBuffer = pHgi->CreateBuffer(instancesBufferDesc);
 
     _accelerationStructureGeometry = {};

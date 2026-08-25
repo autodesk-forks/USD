@@ -63,9 +63,6 @@ public:
         HgiRayTracingCmdsUniquePtr CreateRayTracingCmds() override;
 
     HGIVULKAN_API
-    HgiTextureHandle CreateTexture(HgiTextureDesc const & desc) override;
-
-    HGIVULKAN_API
     HgiTextureHandle CreateTextureForInterop(
         HgiTextureDesc const & desc,
         bool optimalTiling);
