@@ -101,6 +101,18 @@ public:
 
     HGIVULKAN_API
     static std::string GetImageLayoutFormatQualifier(HgiFormat inFormat);
+
+    HGIVULKAN_API
+        static VkAccelerationStructureTypeKHR GetAccelerationStructureType(HgiAccelerationStructureType type);
+
+    HGIVULKAN_API
+        static VkGeometryFlagBitsKHR
+        GetAccelerationStructureGeometryFlags(HgiAccelerationStructureGeometryFlags flags);
+
+    HGIVULKAN_API
+        static VkRayTracingShaderGroupTypeKHR
+        GetRayTracingShaderGroupType(HgiRayTracingShaderGroupType group);
+
 };
 
 

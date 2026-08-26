@@ -91,7 +91,6 @@ private:
     uint64_t _inflightBits;
 };
 
-
 PXR_NAMESPACE_CLOSE_SCOPE
 
 #endif

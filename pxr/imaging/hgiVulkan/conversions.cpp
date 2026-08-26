@@ -6,6 +6,8 @@
 //
 #include "pxr/imaging/hgiVulkan/vulkan.h"
 #include "pxr/imaging/hgiVulkan/conversions.h"
+#include "pxr/imaging/hgiVulkan/buffer.h"
+#include "pxr/imaging/hgiVulkan/shaderFunction.h"
 
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/iterator.h"
@@ -87,7 +89,7 @@ constexpr bool _CompileTimeValidateHgiFormatTable() {
             HgiFormatBC3UNorm8Vec4 == 32) ? true : false;
 }
 
-static_assert(_CompileTimeValidateHgiFormatTable(), 
+static_assert(_CompileTimeValidateHgiFormatTable(),
               "_FormatDesc array out of sync with HgiFormat enum");
 
 
@@ -111,8 +113,14 @@ _ShaderStageTable[][2] =
     {HgiShaderStageTessellationControl, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT},
     {HgiShaderStageTessellationEval,    VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT},
     {HgiShaderStageGeometry,            VK_SHADER_STAGE_GEOMETRY_BIT},
+    {HgiShaderStageRayGen,            VK_SHADER_STAGE_RAYGEN_BIT_KHR},
+    {HgiShaderStageAnyHit,            VK_SHADER_STAGE_ANY_HIT_BIT_KHR},
+    {HgiShaderStageClosestHit,            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR},
+    {HgiShaderStageMiss,            VK_SHADER_STAGE_MISS_BIT_KHR},
+    {HgiShaderStageIntersection,            VK_SHADER_STAGE_INTERSECTION_BIT_KHR},
+    {HgiShaderStageCallable,            VK_SHADER_STAGE_CALLABLE_BIT_KHR},
 };
-static_assert(HgiShaderStageCustomBitsBegin == 1 << 8, "");
+static_assert(HgiShaderStageCustomBitsBegin == 1 << 14, "");
 
 static const uint32_t
 _TextureUsageTable[][2] =
@@ -139,14 +147,18 @@ static_assert(HgiTextureUsageCustomBitsBegin == 1 << 5, "");
 static const uint32_t
 _BufferUsageTable[][2] =
 {
-    {HgiBufferUsageUniform,  VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT},
-    {HgiBufferUsageIndex32,  VK_BUFFER_USAGE_INDEX_BUFFER_BIT},
-    {HgiBufferUsageVertex,   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT},
-    {HgiBufferUsageStorage,  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT},
+    {HgiBufferUsageUniform, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT},
+    {HgiBufferUsageIndex32, VK_BUFFER_USAGE_INDEX_BUFFER_BIT},
+    {HgiBufferUsageVertex,  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT},
+    {HgiBufferUsageStorage, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT},
     {HgiBufferUsageIndirect, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT},
     {HgiBufferUsageUpload,   VK_BUFFER_USAGE_TRANSFER_SRC_BIT},
+    {HgiBufferUsageShaderBindingTable, VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR},
+    {HgiBufferUsageAccelerationStructureBuildInputReadOnly, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR},
+    {HgiBufferUsageAccelerationStructureStorage, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR},
+    {HgiBufferUsageShaderDeviceAddress, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT},
 };
-static_assert(HgiBufferUsageCustomBitsBegin == 1 << 6, "");
+static_assert(HgiBufferUsageCustomBitsBegin == 1 << 12, "");
 
 static const uint32_t
 _CullModeTable[HgiCullModeCount][2] =
@@ -180,15 +192,16 @@ static_assert(HgiWindingCount==2, "");
 static const uint32_t
 _BindResourceTypeTable[HgiBindResourceTypeCount][2] =
 {
-    {HgiBindResourceTypeSampler,              VK_DESCRIPTOR_TYPE_SAMPLER},
-    {HgiBindResourceTypeSampledImage,         VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE},
-    {HgiBindResourceTypeCombinedSamplerImage, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER},
-    {HgiBindResourceTypeStorageImage,         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE},
-    {HgiBindResourceTypeUniformBuffer,        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
-    {HgiBindResourceTypeStorageBuffer,        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER},
-    {HgiBindResourceTypeTessFactors,          VK_DESCRIPTOR_TYPE_STORAGE_BUFFER},
+    {HgiBindResourceTypeSampler,               VK_DESCRIPTOR_TYPE_SAMPLER},
+    {HgiBindResourceTypeSampledImage,          VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE},
+    {HgiBindResourceTypeCombinedSamplerImage,  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER},
+    {HgiBindResourceTypeStorageImage,          VK_DESCRIPTOR_TYPE_STORAGE_IMAGE},
+    {HgiBindResourceTypeUniformBuffer,         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
+    {HgiBindResourceTypeStorageBuffer,         VK_DESCRIPTOR_TYPE_STORAGE_BUFFER},
+    {HgiBindResourceTypeTessFactors,           VK_DESCRIPTOR_TYPE_STORAGE_BUFFER},
+    {HgiBindResourceTypeAccelerationStructure, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR},
 };
-static_assert(HgiBindResourceTypeCount==7, "");
+static_assert(HgiBindResourceTypeCount==8, "");
 
 static const uint32_t
 _blendEquationTable[HgiBlendOpCount][2] =
@@ -328,7 +341,7 @@ static_assert(HgiPrimitiveTypeCount==6, "");
 
 static const std::string
 _imageLayoutFormatTable[HgiFormatCount][2] =
-{ 
+{
     {"HgiFormatUNorm8",            "r8"},
     {"HgiFormatUNorm8Vec2",        "rg8"},
     {"HgiFormatUNorm8Vec4",        "rgba8"},
@@ -364,6 +377,29 @@ _imageLayoutFormatTable[HgiFormatCount][2] =
     {"HgiFormatBC3UNorm8Vec4",     ""},
     {"HgiFormatFloat32UInt8",      ""},
     {"HgiFormatPackedInt1010102",  ""},
+};
+
+static const uint32_t
+_AccelerationStructureTypeTable[][2] =
+{
+    {HgiAccelerationStructureTypeTopLevel, VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR},
+    {HgiAccelerationStructureTypeBottomLevel, VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR},
+};
+
+static const uint32_t
+_RayTracingShaderGroupTypeTable[][2] =
+{
+    {HgiRayTracingShaderGroupTypeGeneral, VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR},
+    {HgiRayTracingShaderGroupTypeTriangles, VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR},
+    {HgiRayTracingShaderGroupTypeProcedural, VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR},
+};
+
+
+
+static const uint32_t
+_AccelerationStructureGeometryFlagsTable[][2] =
+{
+    {HgiAccelerationStructureGeometryOpaque, VK_GEOMETRY_OPAQUE_BIT_KHR},
 };
 
 VkFormat
@@ -414,7 +450,7 @@ HgiVulkanConversions::GetImageAspectFlag(HgiTextureUsage usage)
 {
     VkImageAspectFlags result = VK_IMAGE_ASPECT_COLOR_BIT;
 
-    if (usage & HgiTextureUsageBitsDepthTarget && 
+    if (usage & HgiTextureUsageBitsDepthTarget &&
         usage & HgiTextureUsageBitsStencilTarget) {
         result = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
     } else if (usage & HgiTextureUsageBitsDepthTarget) {
@@ -505,10 +541,21 @@ HgiVulkanConversions::GetBufferUsage(HgiBufferUsage bu)
         if (bu & f[0]) vkFlags |= f[1];
     }
 
+    if (!(bu & HgiBufferUsageNoTransfer)) {
+        vkFlags |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    }
+
     if (vkFlags==0) {
         TF_CODING_ERROR("Missing buffer usage table entry");
     }
     return vkFlags;
+}
+
+VkRayTracingShaderGroupTypeKHR
+HgiVulkanConversions::GetRayTracingShaderGroupType(HgiRayTracingShaderGroupType group)
+{
+    return VkRayTracingShaderGroupTypeKHR(_RayTracingShaderGroupTypeTable[group][1]);
 }
 
 VkCullModeFlags
@@ -600,7 +647,6 @@ HgiVulkanConversions::GetPrimitiveType(HgiPrimitiveType pt)
 {
     return VkPrimitiveTopology(_primitiveTypeTable[pt][1]);
 }
-
 std::string
 HgiVulkanConversions::GetImageLayoutFormatQualifier(HgiFormat inFormat)
 {
@@ -613,4 +659,22 @@ HgiVulkanConversions::GetImageLayoutFormatQualifier(HgiFormat inFormat)
     return layoutQualifier;
 }
 
+
+VkAccelerationStructureTypeKHR
+HgiVulkanConversions::GetAccelerationStructureType(HgiAccelerationStructureType type)
+{
+    return VkAccelerationStructureTypeKHR(_AccelerationStructureTypeTable[type][1]);
+}
+
+VkGeometryFlagBitsKHR
+HgiVulkanConversions::GetAccelerationStructureGeometryFlags(HgiAccelerationStructureGeometryFlags flags)
+{
+    VkGeometryFlagBitsKHR vkFlags = (VkGeometryFlagBitsKHR)0;
+    for (const auto& f : _AccelerationStructureGeometryFlagsTable) {
+        if (flags & f[0]) vkFlags = (VkGeometryFlagBitsKHR)(vkFlags|f[1]);
+    }
+
+    return vkFlags;
+
+}
 PXR_NAMESPACE_CLOSE_SCOPE

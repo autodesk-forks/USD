@@ -63,14 +63,16 @@ using HgiBits = uint32_t;
 /// <li>HgiDeviceCapabilitiesForceEarlyFragmentTest:
 ///   Supports enforcing early fragment test(https://www.khronos.org/opengl/wiki/Early_Fragment_Test),
 ///   regardless of the body of the shader</li>
+/// <li>HgiDeviceCapabilitiesBitsRayTracing:
+///   The device supports ray tracing</li>
 /// </ul>
 ///
 enum HgiDeviceCapabilitiesBits : HgiBits
 {
-    HgiDeviceCapabilitiesBitsPresentation             = 1 << 0,
-    HgiDeviceCapabilitiesBitsBindlessBuffers          = 1 << 1,
-    HgiDeviceCapabilitiesBitsConcurrentDispatch       = 1 << 2,
-    HgiDeviceCapabilitiesBitsUnifiedMemory            = 1 << 3,
+    HgiDeviceCapabilitiesBitsPresentation  = 1 << 0,
+    HgiDeviceCapabilitiesBitsBindlessBuffers  = 1 << 1,
+    HgiDeviceCapabilitiesBitsConcurrentDispatch  = 1 << 2,
+    HgiDeviceCapabilitiesBitsUnifiedMemory  = 1 << 3,
     HgiDeviceCapabilitiesBitsBuiltinBarycentrics      = 1 << 4,
     HgiDeviceCapabilitiesBitsShaderDrawParameters     = 1 << 5,
     HgiDeviceCapabilitiesBitsMultiDrawIndirect        = 1 << 6,
@@ -88,6 +90,7 @@ enum HgiDeviceCapabilitiesBits : HgiBits
     HgiDeviceCapabilitiesBitsRoundPoints              = 1 << 18,
     HgiDeviceCapabilitiesBitsSingleSlotResourceArrays = 1 << 19,
     HgiDeviceCapabilitiesForceEarlyFragmentTest       = 1 << 20,
+    HgiDeviceCapabilitiesBitsRayTracing               = 1 << 21,
 };
 
 using HgiDeviceCapabilities = HgiBits;
@@ -149,11 +152,11 @@ enum HgiTextureType
 ///
 enum HgiTextureUsageBits : HgiBits
 {
-    HgiTextureUsageBitsColorTarget   = 1 << 0,
-    HgiTextureUsageBitsDepthTarget   = 1 << 1,
+    HgiTextureUsageBitsColorTarget = 1 << 0,
+    HgiTextureUsageBitsDepthTarget = 1 << 1,
     HgiTextureUsageBitsStencilTarget = 1 << 2,
-    HgiTextureUsageBitsShaderRead    = 1 << 3,
-    HgiTextureUsageBitsShaderWrite   = 1 << 4,
+    HgiTextureUsageBitsShaderRead = 1 << 3,
+    HgiTextureUsageBitsShaderWrite = 1 << 4,
 
     HgiTextureUsageCustomBitsBegin = 1 << 5,
 };
@@ -189,7 +192,7 @@ enum HgiSamplerAddressMode
 enum HgiSamplerFilter
 {
     HgiSamplerFilterNearest = 0,
-    HgiSamplerFilterLinear  = 1,
+    HgiSamplerFilterLinear = 1,
 
     HgiSamplerFilterCount
 };
@@ -210,8 +213,8 @@ enum HgiSamplerFilter
 enum HgiMipFilter
 {
     HgiMipFilterNotMipmapped = 0,
-    HgiMipFilterNearest      = 1,
-    HgiMipFilterLinear       = 2,
+    HgiMipFilterNearest = 1,
+    HgiMipFilterLinear = 2,
 
     HgiMipFilterCount
 };
@@ -241,10 +244,10 @@ enum HgiBorderColor
 ///
 enum HgiSampleCount
 {
-    HgiSampleCount1  = 1,
-    HgiSampleCount2  = 2,
-    HgiSampleCount4  = 4,
-    HgiSampleCount8  = 8,
+    HgiSampleCount1 = 1,
+    HgiSampleCount2 = 2,
+    HgiSampleCount4 = 4,
+    HgiSampleCount8 = 8,
     HgiSampleCount16 = 16,
 
     HgiSampleCountEnd
@@ -268,7 +271,7 @@ enum HgiAttachmentLoadOp
     HgiAttachmentLoadOpDontCare = 0,
     HgiAttachmentLoadOpClear,
     HgiAttachmentLoadOpLoad,
-    
+
     HgiAttachmentLoadOpCount
 };
 
@@ -287,7 +290,7 @@ enum HgiAttachmentStoreOp
 {
     HgiAttachmentStoreOpDontCare = 0,
     HgiAttachmentStoreOpStore,
-    
+
     HgiAttachmentStoreOpCount
 };
 
@@ -314,14 +317,20 @@ enum HgiAttachmentStoreOp
 ///
 enum HgiBufferUsageBits : HgiBits
 {
-    HgiBufferUsageUniform  = 1 << 0,
-    HgiBufferUsageIndex32  = 1 << 1,
-    HgiBufferUsageVertex   = 1 << 2,
-    HgiBufferUsageStorage  = 1 << 3,
+    HgiBufferUsageUniform = 1 << 0,
+    HgiBufferUsageIndex32 = 1 << 1,
+    HgiBufferUsageVertex = 1 << 2,
+    HgiBufferUsageStorage = 1 << 3,
     HgiBufferUsageIndirect = 1 << 4,
     HgiBufferUsageUpload   = 1 << 5,
+    HgiBufferUsageAccelerationStructureBuildInputReadOnly = 1 << 6,
+    HgiBufferUsageAccelerationStructureStorage = 1 << 7,
+    HgiBufferUsageShaderDeviceAddress = 1 << 8,
+    HgiBufferUsageShaderBindingTable = 1 << 9,
+    HgiBufferUsageNoTransfer = 1 << 10,
+    HgiBufferUsageRayTracingExtensions = 1 << 11,
 
-    HgiBufferUsageCustomBitsBegin = 1 << 6,
+    HgiBufferUsageCustomBitsBegin = 1 << 12,
 };
 using HgiBufferUsage = HgiBits;
 
@@ -355,15 +364,22 @@ using HgiBufferUsage = HgiBits;
 ///
 enum HgiShaderStageBits : HgiBits
 {
-    HgiShaderStageVertex                 = 1 << 0,
-    HgiShaderStageFragment               = 1 << 1,
-    HgiShaderStageCompute                = 1 << 2,
-    HgiShaderStageTessellationControl    = 1 << 3,
-    HgiShaderStageTessellationEval       = 1 << 4,
-    HgiShaderStageGeometry               = 1 << 5,
+    HgiShaderStageVertex = 1 << 0,
+    HgiShaderStageFragment = 1 << 1,
+    HgiShaderStageCompute = 1 << 2,
+    HgiShaderStageTessellationControl = 1 << 3,
+    HgiShaderStageTessellationEval = 1 << 4,
+    HgiShaderStageGeometry = 1 << 5,
     HgiShaderStagePostTessellationControl = 1 << 6,
     HgiShaderStagePostTessellationVertex = 1 << 7,
-    HgiShaderStageCustomBitsBegin        = 1 << 8,
+    HgiShaderStageRayGen = 1 << 8,
+    HgiShaderStageAnyHit = 1 << 9,
+    HgiShaderStageClosestHit = 1 << 10,
+    HgiShaderStageMiss = 1 << 11,
+    HgiShaderStageIntersection = 1 << 12,
+    HgiShaderStageCallable = 1 << 13,
+
+    HgiShaderStageCustomBitsBegin        = 1 << 14,
 };
 using HgiShaderStage = HgiBits;
 
@@ -402,6 +418,7 @@ enum HgiBindResourceType
     HgiBindResourceTypeUniformBuffer,
     HgiBindResourceTypeStorageBuffer,
     HgiBindResourceTypeTessFactors,
+    HgiBindResourceTypeAccelerationStructure,
 
     HgiBindResourceTypeCount
 };
@@ -678,7 +695,7 @@ enum HgiSubmitWaitType
 enum HgiMemoryBarrierBits
 {
     HgiMemoryBarrierNone = 0,
-    HgiMemoryBarrierAll  = 1 << 0
+    HgiMemoryBarrierAll = 1 << 0
 };
 using HgiMemoryBarrier = HgiBits;
 
@@ -810,6 +827,36 @@ enum HgiShaderTextureType
     HgiShaderTextureTypeShadowTexture,
     HgiShaderTextureTypeArrayTexture,
     HgiShaderTextureTypeCubemapTexture
+};
+
+enum HgiAccelerationStructureGeometryFlags {
+    HgiAccelerationStructureGeometryOpaque = 1 << 0,
+};
+
+enum HgiAccelerationStructureInstanceFlags {
+    HgiAccelerationStructureInstanceFlagsDisableFaceCulling = 1 << 0,
+    HgiAccelerationStructureInstanceFlagsFlipFacing = 1 << 1,
+};
+
+enum HgiAccelerationStructureType {
+    HgiAccelerationStructureTypeTopLevel,
+    HgiAccelerationStructureTypeBottomLevel,
+};
+
+enum HgiIndexType {
+    HgiIndexTypeUInt32,
+    HgiIndexTypeUInt16,
+    HgiIndexTypeCount,
+};
+
+enum HgiAccelerationStructureBuildFlags {
+    HgiAccelerationStructureBuildFlagsPreferFastTrace,
+};
+
+enum HgiRayTracingShaderGroupType {
+    HgiRayTracingShaderGroupTypeGeneral,
+    HgiRayTracingShaderGroupTypeTriangles,
+    HgiRayTracingShaderGroupTypeProcedural,
 };
 
 /// \enum HgiComputeDispatch

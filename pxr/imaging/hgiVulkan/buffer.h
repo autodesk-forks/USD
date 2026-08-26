@@ -17,6 +17,8 @@ class HgiVulkan;
 class HgiVulkanCommandBuffer;
 class HgiVulkanDevice;
 
+using HgiVulkanDeviceAddress = VkDeviceOrHostAddressKHR;
+using HgiVulkanConstDeviceAddress = VkDeviceOrHostAddressConstKHR;
 ///
 /// \struct HgiVulkanMappedBufferUniquePointerDeleter
 ///
@@ -56,40 +58,44 @@ class HgiVulkanBuffer final : public HgiBuffer
 {
 public:
     HGIVULKAN_API
-    ~HgiVulkanBuffer() override;
+        ~HgiVulkanBuffer() override;
 
     HGIVULKAN_API
-    size_t GetByteSizeOfResource() const override;
+        size_t GetByteSizeOfResource() const override;
 
     HGIVULKAN_API
-    uint64_t GetRawResource() const override;
+        uint64_t GetRawResource() const override;
 
     HGIVULKAN_API
-    void* GetCPUStagingAddress() override;
-
-    /// Returns true if the provided ptr matches the address of staging buffer.
-    HGIVULKAN_API
-    bool IsCPUStagingAddress(const void* address) const;
-
-    /// Returns the vulkan buffer.
-    HGIVULKAN_API
-    VkBuffer GetVulkanBuffer() const;
-
-    /// Returns the memory allocation
-    HGIVULKAN_API
-    VmaAllocation GetVulkanMemoryAllocation() const;
-
-    /// Returns the staging buffer.
-    HGIVULKAN_API
-    HgiVulkanBuffer* GetStagingBuffer() const;
-
-    /// Returns the device used to create this object.
-    HGIVULKAN_API
-    HgiVulkanDevice* GetDevice() const;
+        void* GetCPUStagingAddress() override;
 
     /// Returns the (writable) inflight bits of when this object was trashed.
     HGIVULKAN_API
-    uint64_t & GetInflightBits();
+        uint64_t GetDeviceAddress() const override;
+
+    /// Returns true if the provided ptr matches the address of staging buffer.
+    HGIVULKAN_API
+        bool IsCPUStagingAddress(const void* address) const;
+
+    /// Returns the vulkan buffer.
+    HGIVULKAN_API
+        VkBuffer GetVulkanBuffer() const;
+
+    /// Returns the memory allocation
+    HGIVULKAN_API
+        VmaAllocation GetVulkanMemoryAllocation() const;
+
+    /// Returns the staging buffer.
+    HGIVULKAN_API
+        HgiVulkanBuffer* GetStagingBuffer() const;
+
+    /// Returns the device used to create this object.
+    HGIVULKAN_API
+        HgiVulkanDevice* GetDevice() const;
+
+    /// Returns the (writable) inflight bits of when this object was trashed.
+    HGIVULKAN_API
+        uint64_t& GetInflightBits();
 
     /// Creates a staging buffer.
     /// The caller is responsible for the lifetime (destruction) of the buffer.
@@ -116,19 +122,21 @@ protected:
         HgiBufferDesc const& desc);
 
 private:
+    void allocateDirect(const VkBufferCreateInfo& bufferCreateInfo, VkMemoryPropertyFlags memoryPropertyFlags, VkDeviceSize size, const void* data);
+
     HgiVulkanBuffer() = delete;
-    HgiVulkanBuffer & operator=(const HgiVulkanBuffer&) = delete;
+    HgiVulkanBuffer& operator=(const HgiVulkanBuffer&) = delete;
     HgiVulkanBuffer(const HgiVulkanBuffer&) = delete;
 
     HgiVulkan* _hgi;
     VkBuffer _vkBuffer;
+    VkDeviceMemory _vkDeviceMemory;
     VmaAllocation _vmaAllocation;
     uint64_t _inflightBits;
     std::unique_ptr<HgiVulkanBuffer> _stagingBuffer;
     HgiVulkanMappedBufferUniquePointer _cpuStagingAddress;
     bool _mappable;
 };
-
 
 PXR_NAMESPACE_CLOSE_SCOPE
 

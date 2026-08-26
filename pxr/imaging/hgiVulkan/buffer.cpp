@@ -32,10 +32,11 @@ HgiVulkanBuffer::HgiVulkanBuffer(
     VmaAllocator vma = device->GetVulkanMemoryAllocator();
 
     VkBufferCreateInfo bi = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-    bi.size = _descriptor.byteSize;
-    bi.usage = HgiVulkanConversions::GetBufferUsage(_descriptor.usage);
-    bi.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-                VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    bi.size = desc.byteSize;
+    bi.usage = HgiVulkanConversions::GetBufferUsage(desc.usage);
+    // Disable transfer bits for ray tracing.
+    // bi.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT | 
+    //             VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     bi.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // gfx queue only
 
     // Create buffer with memory allocated and bound.
@@ -221,6 +222,16 @@ uint64_t &
 HgiVulkanBuffer::GetInflightBits()
 {
     return _inflightBits;
+}
+
+uint64_t HgiVulkanBuffer::GetDeviceAddress() const
+{
+    VkBufferDeviceAddressInfoKHR bufferDeviceAI{};
+    bufferDeviceAI.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    bufferDeviceAI.buffer = _vkBuffer;
+
+    HgiVulkanDevice* device = _hgi->GetPrimaryDevice();
+    return device->vkGetBufferDeviceAddressKHR(device->GetVulkanDevice(), &bufferDeviceAI);
 }
 
 HgiVulkanMappedBufferUniquePointer

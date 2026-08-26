@@ -23,6 +23,7 @@
 #include "pxr/imaging/hgiVulkan/shaderFunction.h"
 #include "pxr/imaging/hgiVulkan/shaderProgram.h"
 #include "pxr/imaging/hgiVulkan/texture.h"
+#include "pxr/imaging/hgiVulkan/accelerationStructure.h"
 
 #include "pxr/base/trace/trace.h"
 
@@ -113,6 +114,20 @@ HgiVulkan::CreateComputeCmds(
 {
     HgiVulkanComputeCmds* cmds(new HgiVulkanComputeCmds(this, desc));
     return HgiComputeCmdsUniquePtr(cmds);
+}
+
+HgiAccelerationStructureCmdsUniquePtr
+HgiVulkan::CreateAccelerationStructureCmds()
+{
+    HgiVulkanAccelerationStructureCmds* cmds(new HgiVulkanAccelerationStructureCmds(this));
+    return HgiAccelerationStructureCmdsUniquePtr(cmds);
+}
+
+HgiRayTracingCmdsUniquePtr
+HgiVulkan::CreateRayTracingCmds()
+{
+    HgiVulkanRayTracingCmds* cmds(new HgiVulkanRayTracingCmds(this));
+    return HgiRayTracingCmdsUniquePtr(cmds);
 }
 
 /* Multi threaded */
@@ -272,6 +287,20 @@ HgiVulkan::DestroyComputePipeline(HgiComputePipelineHandle* pipeHandle)
     TrashObject(pipeHandle, GetGarbageCollector()->GetComputePipelineList());
 }
 
+HgiRayTracingPipelineHandle
+HgiVulkan::CreateRayTracingPipeline(HgiRayTracingPipelineDesc const& desc)
+{
+    return HgiRayTracingPipelineHandle(
+        new HgiVulkanRayTracingPipeline(this, GetPrimaryDevice(), desc),
+        GetUniqueId());
+}
+
+void
+HgiVulkan::DestroyRayTracingPipeline(HgiRayTracingPipelineHandle* pipeHandle)
+{
+    TrashObject(pipeHandle, GetGarbageCollector()->GetRayTracingPipelineList());
+}
+
 /* Multi threaded */
 TfToken const&
 HgiVulkan::GetAPIName() const {
@@ -406,6 +435,33 @@ HgiVulkan::_EndFrameSync()
         device->DumpMemoryStats();
     }
 }
+
+HgiAccelerationStructureHandle HgiVulkan::CreateAccelerationStructure(HgiAccelerationStructureDesc const& desc) {
+    return HgiAccelerationStructureHandle(
+        new HgiVulkanAccelerationStructure(this, GetPrimaryDevice(), desc),
+        GetUniqueId());
+}
+
+void HgiVulkan::DestroyAccelerationStructure(HgiAccelerationStructureHandle* accelStructHandle) {
+    TrashObject(accelStructHandle, GetGarbageCollector()->GetAccelerationStructureList());
+}
+
+HgiAccelerationStructureGeometryHandle HgiVulkan::CreateAccelerationStructureGeometry(HgiAccelerationStructureTriangleGeometryDesc const& desc) {
+    return HgiAccelerationStructureGeometryHandle(
+        new HgiVulkanAccelerationStructureGeometry(this, GetPrimaryDevice(), desc),
+        GetUniqueId());
+}
+
+HgiAccelerationStructureGeometryHandle HgiVulkan::CreateAccelerationStructureGeometry(HgiAccelerationStructureInstanceGeometryDesc const& desc) {
+    return HgiAccelerationStructureGeometryHandle(
+        new HgiVulkanAccelerationStructureGeometry(this, GetPrimaryDevice(), desc),
+        GetUniqueId());
+}
+
+void HgiVulkan::DestroyAccelerationStructureGeometry(HgiAccelerationStructureGeometryHandle* accelStructHandle) {
+    TrashObject(accelStructHandle, GetGarbageCollector()->GetAccelerationStructureGeometryList());
+}
+
 
 
 PXR_NAMESPACE_CLOSE_SCOPE

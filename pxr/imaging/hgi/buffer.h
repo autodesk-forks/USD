@@ -117,7 +117,12 @@ public:
     /// the caller should use BlitCmds CopyBufferCpuToGpu to ensure the transfer
     /// from the staging area to the GPU is scheduled.
     HGI_API
-    virtual void* GetCPUStagingAddress() = 0;
+        virtual void* GetCPUStagingAddress() = 0;
+
+    /// Returns the 'staging area' in which new buffer data is copied before
+    /// it is flushed to GPU.
+    HGI_API
+        virtual uint64_t GetDeviceAddress() const;
 
 protected:
     HGI_API

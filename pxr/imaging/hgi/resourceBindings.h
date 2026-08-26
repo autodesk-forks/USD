@@ -15,6 +15,7 @@
 #include "pxr/imaging/hgi/sampler.h"
 #include "pxr/imaging/hgi/texture.h"
 #include "pxr/imaging/hgi/types.h"
+#include "pxr/imaging/hgi/accelerationStructure.h"
 
 #include <string>
 #include <vector>
@@ -23,6 +24,24 @@
 PXR_NAMESPACE_OPEN_SCOPE
 
 
+struct HgiAccelerationStructureBindDesc
+{
+    HgiAccelerationStructureHandleVector accelerationStructures;
+    HgiBindResourceType resourceType = HgiBindResourceTypeAccelerationStructure;
+    uint32_t bindingIndex = 0;
+    HgiShaderStage stageUsage;
+};
+using HgiAccelerationStructureBindDescVector = std::vector<HgiAccelerationStructureBindDesc>;
+
+HGI_API
+bool operator==(
+    const HgiAccelerationStructureBindDesc& lhs,
+    const HgiAccelerationStructureBindDesc& rhs);
+
+HGI_API
+inline bool operator!=(
+    const HgiAccelerationStructureBindDesc& lhs,
+    const HgiAccelerationStructureBindDesc& rhs);
 
 
 
@@ -149,6 +168,7 @@ struct HgiResourceBindingsDesc
     HgiResourceBindingsDesc();
 
     std::string debugName;
+    HgiAccelerationStructureBindDescVector accelerationStructures;
     HgiBufferBindDescVector buffers;
     HgiTextureBindDescVector textures;
 };
@@ -188,7 +208,7 @@ protected:
 
 private:
     HgiResourceBindings() = delete;
-    HgiResourceBindings & operator=(const HgiResourceBindings&) = delete;
+    HgiResourceBindings& operator=(const HgiResourceBindings&) = delete;
     HgiResourceBindings(const HgiResourceBindings&) = delete;
 };
 

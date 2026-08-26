@@ -136,7 +136,7 @@ private:
 
     // Set a command buffer as not in-flight.
     // Thread safety: This call is thread safe.
-    void _ReleaseInflightBit(uint8_t inflightId);
+    void _ReleaseInflightBit(HgiVulkan_CommandPool* pool, uint8_t inflightId, bool enabled);
 
     HgiVulkanDevice* _device;
     VkQueue _vkGfxQueue;

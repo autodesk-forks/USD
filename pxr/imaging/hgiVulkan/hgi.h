@@ -16,6 +16,9 @@
 #include "pxr/imaging/hgiVulkan/commandQueue.h"
 #include "pxr/imaging/hgiVulkan/device.h"
 #include "pxr/imaging/hgiVulkan/vulkan.h"
+#include "pxr/imaging/hgiVulkan/accelerationStructureCmds.h"
+#include "pxr/imaging/hgiVulkan/rayTracingPipeline.h"
+#include "pxr/imaging/hgiVulkan/rayTracingCmds.h"
 
 #include <thread>
 #include <vector>
@@ -52,6 +55,12 @@ public:
     HGIVULKAN_API
     HgiComputeCmdsUniquePtr CreateComputeCmds(
         HgiComputeCmdsDesc const& desc) override;
+
+    HGIVULKAN_API
+        HgiAccelerationStructureCmdsUniquePtr CreateAccelerationStructureCmds() override;
+
+    HGIVULKAN_API
+        HgiRayTracingCmdsUniquePtr CreateRayTracingCmds() override;
 
     HGIVULKAN_API
     HgiTextureHandle CreateTextureForInterop(
@@ -101,11 +110,18 @@ public:
         HgiGraphicsPipelineHandle* pipeHandle) override;
 
     HGIVULKAN_API
-    HgiComputePipelineHandle CreateComputePipeline(
-        HgiComputePipelineDesc const& pipeDesc) override;
+        HgiComputePipelineHandle CreateComputePipeline(
+            HgiComputePipelineDesc const& pipeDesc) override;
 
     HGIVULKAN_API
-    void DestroyComputePipeline(HgiComputePipelineHandle* pipeHandle) override;
+        void DestroyComputePipeline(HgiComputePipelineHandle* pipeHandle) override;
+
+    HGIVULKAN_API
+        HgiRayTracingPipelineHandle CreateRayTracingPipeline(
+            HgiRayTracingPipelineDesc const& pipeDesc) override;
+
+    HGIVULKAN_API
+        void DestroyRayTracingPipeline(HgiRayTracingPipelineHandle* pipeHandle) override;
 
     HGIVULKAN_API
     TfToken const& GetAPIName() const override;
@@ -124,6 +140,21 @@ public:
 
     HGIVULKAN_API
     void GarbageCollect() override;
+
+    HGIVULKAN_API
+        HgiAccelerationStructureHandle CreateAccelerationStructure(HgiAccelerationStructureDesc const& desc) override;
+
+    HGIVULKAN_API
+        void DestroyAccelerationStructure(HgiAccelerationStructureHandle* accelStructHandle)  override;
+
+    HGIVULKAN_API
+        virtual HgiAccelerationStructureGeometryHandle CreateAccelerationStructureGeometry(HgiAccelerationStructureTriangleGeometryDesc const& desc)  override;
+
+    HGIVULKAN_API
+        virtual HgiAccelerationStructureGeometryHandle CreateAccelerationStructureGeometry(HgiAccelerationStructureInstanceGeometryDesc const& desc)  override;
+
+    HGIVULKAN_API
+        virtual void DestroyAccelerationStructureGeometry(HgiAccelerationStructureGeometryHandle* accelStructHandle) override;
 
     //
     // HgiVulkan specific

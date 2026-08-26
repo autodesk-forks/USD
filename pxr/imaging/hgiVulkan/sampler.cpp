@@ -50,7 +50,7 @@ HgiVulkanSampler::HgiVulkanSampler(
         ? 0.25 : VK_LOD_CLAMP_NONE;
     // 0.25 if not mipmapped, to emulate OpenGL
     // See https://registry.khronos.org/vulkan/specs/latest/man/html/VkSamplerCreateInfo.html#_description
-
+#if 1
     if ((desc.minFilter != HgiSamplerFilterNearest ||
          desc.mipFilter == HgiMipFilterLinear) &&
          desc.magFilter != HgiSamplerFilterNearest) {
@@ -63,6 +63,12 @@ HgiVulkanSampler::HgiVulkanSampler(
                 static_cast<float>(desc.maxAnisotropy),
                 static_cast<float>(TfGetEnvSetting(HGI_MAX_ANISOTROPY))}) : 1.0f;
     }
+#else
+    // Force to false until issue with capabilities fixed.
+    // TODO: Verify & remove this code!!!!!!!
+    sampler.anisotropyEnable = VK_FALSE;
+    sampler.maxAnisotropy = 1.0f;
+#endif
 
     HGIVULKAN_VERIFY_VK_RESULT(
         vkCreateSampler(

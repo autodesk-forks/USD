@@ -10,6 +10,8 @@ pxr_library(hgi
 
     PUBLIC_CLASSES
         attachmentDesc
+        accelerationStructure
+        accelerationStructureCmds
         blitCmds
         buffer
         capabilities
@@ -24,6 +26,8 @@ pxr_library(hgi
         hgi
         indirectCommandEncoder
         resourceBindings
+        rayTracingPipeline
+        rayTracingCmds
         sampler
         shaderFunction
         shaderFunctionDesc

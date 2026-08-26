@@ -90,6 +90,12 @@ public:
 
     HGIMETAL_API
     static MTLColorWriteMask GetColorWriteMask(HgiColorMask mask);
+    
+    HGIMETAL_API
+    static MTLIndexType GetIndexType(HgiIndexType type);
+    
+    HGIMETAL_API
+    static MTLAttributeFormat GetAttributeFormat(HgiFormat format);
 };
 
 

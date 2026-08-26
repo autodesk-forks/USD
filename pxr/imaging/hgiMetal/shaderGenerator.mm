@@ -10,6 +10,7 @@
 #include "pxr/imaging/hgiMetal/conversions.h"
 #include "pxr/imaging/hgiMetal/resourceBindings.h"
 #include "pxr/imaging/hgi/tokens.h"
+#include "pxr/base/tf/getenv.h"
 
 #include <sstream>
 #include <unordered_map>
@@ -447,7 +448,8 @@ _ComputeHeader(id<MTLDevice> device, HgiShaderStage stage)
             << "#include <metal_pack>\n"
             << "#pragma clang diagnostic ignored \"-Wunused-variable\"\n"
             << "#pragma clang diagnostic ignored \"-Wsign-compare\"\n"
-            << "using namespace metal;\n";
+            << "using namespace metal;\n"
+            << "using namespace raytracing;\n";
 
     // Basic types
     header  << "#define double float\n"
@@ -1399,6 +1401,72 @@ HgiMetalShaderGenerator::_BuildShaderStageEntryPoints(
                             "tcInput",
                             functionAttributesSS.str());
         }
+        case HgiShaderStageRayGen: {
+            return std::make_unique
+                    <HgiMetalShaderStageEntryPoint>(
+                        stageData,
+                        this,
+                        "vsInput",
+                        "vsInput",
+                        "kernel",
+                        "vsInput",
+                        functionAttributesSS.str());
+        }
+        case HgiShaderStageAnyHit: {
+            return std::make_unique
+                    <HgiMetalShaderStageEntryPoint>(
+                        stageData,
+                        this,
+                        "vsInput",
+                        "vsInput",
+                        "anyhit",
+                        "vsInput",
+                        functionAttributesSS.str());
+        }
+        case HgiShaderStageClosestHit: {
+            return std::make_unique
+                    <HgiMetalShaderStageEntryPoint>(
+                        stageData,
+                        this,
+                        "vsInput",
+                        "vsInput",
+                        "closesthit",
+                        "vsInput",
+                        functionAttributesSS.str());
+        }
+        case HgiShaderStageMiss: {
+            return std::make_unique
+                    <HgiMetalShaderStageEntryPoint>(
+                        stageData,
+                        this,
+                        "vsInput",
+                        "vsInput",
+                        "miss",
+                        "vsInput",
+                        functionAttributesSS.str());
+        }
+        case HgiShaderStageIntersection: {
+            return std::make_unique
+                    <HgiMetalShaderStageEntryPoint>(
+                        stageData,
+                        this,
+                        "vsInput",
+                        "vsInput",
+                        "intersection",
+                        "vsInput",
+                        functionAttributesSS.str());
+        }
+        case HgiShaderStageCallable: {
+            return std::make_unique
+                    <HgiMetalShaderStageEntryPoint>(
+                        stageData,
+                        this,
+                        "vsInput",
+                        "vsInput",
+                        "callable",
+                        "vsInput",
+                        functionAttributesSS.str());
+        }
         default: {
             TF_CODING_ERROR("Unknown shader stage");
             return nullptr;
@@ -1451,85 +1519,114 @@ HgiMetalShaderGenerator::HgiMetalShaderGenerator(
 
 HgiMetalShaderGenerator::~HgiMetalShaderGenerator() = default;
 
+// TODO: This will be removed when HGI RT refactor is done
+void HgiMetalShaderGenerator::_ReplaceSourceCode(std::ostream &ss) {
+    if(_descriptor.debugName.compare("BackgroundMissShader") == 0) {
+        ss <<
+            "[[visible]] int BackgroundMissShader()\n"
+            "{\n"
+            "    return 1;\n"
+            "}\n";
+    }
+    else if(_descriptor.debugName.compare("RadianceMissShader") == 0) {
+        ss <<
+            "[[visible]] int RadianceMissShader()\n"
+            "{\n"
+            "    return 2;\n"
+            "}\n";
+    }
+    else if(_descriptor.debugName.compare("ShadowMissShader") == 0) {
+        ss <<
+            "[[visible]] int ShadowMissShader()\n"
+            "{\n"
+            "    return 3;\n"
+            "}\n";
+    }
+    else if(_descriptor.debugName.compare("ClosestHitShader") == 0) {
+        ss <<
+            "[[visible]] int ClosestHitShader()\n"
+            "{\n"
+            "    return 4;\n"
+            "}\n";
+    }
+    else {
+        ss << "Error: Unrecognized shader";
+    }
+}
+
+void HgiMetalShaderGenerator::_MergeSourceCode(std::ostream &ss)
+{
+    std::string storage = _GetShaderCode();
+    ss << storage;
+}
+
 void HgiMetalShaderGenerator::_Execute(std::ostream &ss)
 {
     HgiMetalShaderSectionUniquePtrVector * const shaderSections =
         GetShaderSections();
 
-    ss << "\n// //////// Global Macros ////////\n";
-    for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
-        section->VisitGlobalMacros(ss);
+    const char* translateKey = "MTL_TRANSLATE_GLSL";
+    if(strnstr(_GetShaderCodeDeclarations(), translateKey, strlen(_GetShaderCodeDeclarations())) != 0)
+    {
+        _ReplaceSourceCode(ss);
     }
-
-    ss << _GetShaderCodeDeclarations();
-
-    ss << "\n// //////// Global Member Declarations ////////\n";
-    for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
-        section->VisitGlobalMemberDeclarations(ss);
-    }
-
-    //generate scope area in metal.
-    //We create a class that wraps the main shader function, and to simulate
-    //global space in metal which it has not by default, we put all
-    //glslfx global members into a Scope struct, and host the global members
-    //as members of that instance
-    ss << "struct " << _generatorShaderSections->GetScopeTypeName() << " { \n";
-
-    // Metal extends the global scope into a "scope" embedder,
-    // which simulates a global scope for some member variables
-    ss << "\n// //////// Scope Structs ////////\n";
-    for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
-        section->VisitScopeStructs(ss);
-    }
-    ss << "\n// //////// Scope Member Declarations ////////\n";
-    if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
-        if (this->_GetShaderStage() == HgiShaderStageFragment) {
-            ss << "bool discarded_fragment;\n";
+    else
+    {
+        ss << "\n// //////// Global Macros ////////\n";
+        for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
+            section->VisitGlobalMacros(ss);
         }
-    }
-    for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
-        section->VisitScopeMemberDeclarations(ss);
-    }
-    ss << "\n// //////// Scope Function Definitions ////////\n";
-    if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
-        if (this->_GetShaderStage() == HgiShaderStageFragment) {
-            ss << "void set_flag_and_discard_fragment() {\n"
-                  "    discarded_fragment = true;\n"
-                  "    discard_fragment();\n"
-                  "}\n";
+        
+        ss << _GetShaderCodeDeclarations();
+        
+        ss << "\n// //////// Global Member Declarations ////////\n";
+        for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
+            section->VisitGlobalMemberDeclarations(ss);
         }
-    }
-    for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
-        section->VisitScopeFunctionDefinitions(ss);
-    }
-
-    //constructor
-    ss << _generatorShaderSections->GetScopeTypeName() << "(\n";
-    bool firstParam = true;
-    bool hasContructorParams = false;
-    ss << "\n// //////// Scope Constructor Declarations ////////\n";
-    for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
-        std::stringstream paramDecl;
-        if (section->VisitScopeConstructorDeclarations(paramDecl)) {
-            if(!firstParam) {
-                ss << ",\n";
+        
+        //generate scope area in metal.
+        //We create a class that wraps the main shader function, and to simulate
+        //global space in metal which it has not by default, we put all
+        //glslfx global members into a Scope struct, and host the global members
+        //as members of that instance
+        ss << "struct " << _generatorShaderSections->GetScopeTypeName() << " { \n";
+        
+        // Metal extends the global scope into a "scope" embedder,
+        // which simulates a global scope for some member variables
+        ss << "\n// //////// Scope Structs ////////\n";
+        for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
+            section->VisitScopeStructs(ss);
+        }
+        ss << "\n// //////// Scope Member Declarations ////////\n";
+        if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
+            if (this->_GetShaderStage() == HgiShaderStageFragment) {
+                ss << "bool discarded_fragment;\n";
             }
-            else {
-                firstParam = false;
-            }
-            ss << paramDecl.str();
-            hasContructorParams = true;
         }
-    }
-    ss << ")";
-    
-    if (hasContructorParams) {
-        ss << ":\n";
-        firstParam = true;
-        ss << "\n// //////// Scope Constructor Initialization ////////\n";
+        for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
+            section->VisitScopeMemberDeclarations(ss);
+        }
+        ss << "\n// //////// Scope Function Definitions ////////\n";
+        if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
+            if (this->_GetShaderStage() == HgiShaderStageFragment) {
+                ss << "void set_flag_and_discard_fragment() {\n"
+                      "    discarded_fragment = true;\n"
+                      "    discard_fragment();\n"
+                      "}\n";
+            }
+        }
+        for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
+            section->VisitScopeFunctionDefinitions(ss);
+        }
+
+        //constructor
+        ss << _generatorShaderSections->GetScopeTypeName() << "(\n";
+        bool firstParam = true;
+        bool hasContructorParams = false;
+        ss << "\n// //////// Scope Constructor Declarations ////////\n";
         for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
             std::stringstream paramDecl;
-            if (section->VisitScopeConstructorInitialization(paramDecl)) {
+            if (section->VisitScopeConstructorDeclarations(paramDecl)) {
                 if(!firstParam) {
                     ss << ",\n";
                 }
@@ -1537,113 +1634,135 @@ void HgiMetalShaderGenerator::_Execute(std::ostream &ss)
                     firstParam = false;
                 }
                 ss << paramDecl.str();
-            }
-        }
-    }
-    ss << "{};\n\n";
-    
-    ss << _GetShaderCode();
-    ss << "};\n\n";
-
-    //write out the entry point signature
-    HgiMetalStageOutputShaderSection* const outputs =
-        _generatorShaderSections->GetOutputs();
-    std::stringstream returnSS;
-    if (outputs &&
-        (_GetShaderStage() != HgiShaderStagePostTessellationControl)) {
-        const HgiMetalStructTypeDeclarationShaderSection* const decl =
-            outputs->GetStructTypeDeclaration();
-        decl->WriteIdentifier(returnSS);
-    }
-    else {
-        //handle compute
-        returnSS << "void";
-    }
-
-    ss << _generatorShaderSections->GetEntryPointAttributes();
-
-    ss << _generatorShaderSections->GetEntryPointStageName();
-    ss << " " << returnSS.str() << " "
-       << _generatorShaderSections->GetEntryPointFunctionName() << "(\n";
-
-    // Pass in all parameters declared by interested code sections into the
-    // entry point of the shader
-    firstParam = true;
-    ss << "\n// //////// Entry Point Parameter Declarations ////////\n";
-    for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
-        std::stringstream paramDecl;
-        if (section->VisitEntryPointParameterDeclarations(paramDecl)) {
-            if(!firstParam) {
-                ss << ",\n";
-            }
-            else {
-                firstParam = false;
-            }
-            ss << paramDecl.str();
-        }
-    }
-    ss <<"){\n";
-    ss << _generatorShaderSections->GetScopeTypeName() << " "
-       << _generatorShaderSections->GetScopeInstanceName();
-    
-    if (hasContructorParams) {
-        ss << "(\n";
-        firstParam = true;
-        ss << "\n// //////// Scope Constructor Instantiation ////////\n";
-        for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
-            std::stringstream paramDecl;
-            if (section->VisitScopeConstructorInstantiation(paramDecl)) {
-                if(!firstParam) {
-                    ss << ",\n";
-                }
-                else {
-                    firstParam = false;
-                }
-                ss << paramDecl.str();
+                hasContructorParams = true;
             }
         }
         ss << ")";
-    }
-    ss << ";\n";
-
-    // Execute all code that hooks into the entry point function
-    ss << "\n// //////// Entry Point Function Executions ////////\n";
-    if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
-        if (this->_GetShaderStage() == HgiShaderStageFragment) {
-            ss << _generatorShaderSections->GetScopeInstanceName()
-               << ".discarded_fragment = false;\n";
-        }
-    }
-    for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
-        if (section->VisitEntryPointFunctionExecutions(
-                ss, _generatorShaderSections->GetScopeInstanceName())) {
-            ss << "\n";
-        }
-    }
-    if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
-        if (this->_GetShaderStage() == HgiShaderStageFragment) {
-            ss << "if (" << _generatorShaderSections->GetScopeInstanceName()
-               << ".discarded_fragment)\n";
-            ss << "{\n";
-            if (outputs) {
-                ss << "    return {};\n";
-            } else {
-                ss << "    return;\n";
+        
+        if (hasContructorParams) {
+            ss << ":\n";
+            firstParam = true;
+            ss << "\n// //////// Scope Constructor Initialization ////////\n";
+            for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
+                std::stringstream paramDecl;
+                if (section->VisitScopeConstructorInitialization(paramDecl)) {
+                    if(!firstParam) {
+                        ss << ",\n";
+                    }
+                    else {
+                        firstParam = false;
+                    }
+                    ss << paramDecl.str();
+                }
             }
-            ss << "}\n";
         }
-    }
-    //return the instance of the shader entrypoint output type
-    if (outputs &&
-        (_GetShaderStage() != HgiShaderStagePostTessellationControl)) {
-        const std::string outputInstanceName =
+        ss << "{};\n\n";
+        
+        _MergeSourceCode(ss);
+        
+        ss << "};\n\n";
+        
+        //write out the entry point signature
+        HgiMetalStageOutputShaderSection* const outputs =
+        _generatorShaderSections->GetOutputs();
+        std::stringstream returnSS;
+        if (outputs &&
+            (_GetShaderStage() != HgiShaderStagePostTessellationControl)) {
+            const HgiMetalStructTypeDeclarationShaderSection* const decl =
+                outputs->GetStructTypeDeclaration();
+            decl->WriteIdentifier(returnSS);
+        }
+        else {
+            //handle compute
+            returnSS << "void";
+        }
+
+        ss << _generatorShaderSections->GetEntryPointAttributes();
+
+        ss << _generatorShaderSections->GetEntryPointStageName();
+        ss << " " << returnSS.str() << " "
+            << _generatorShaderSections->GetEntryPointFunctionName() << "(\n";
+
+        // Pass in all parameters declared by interested code sections into the
+        // entry point of the shader
+        firstParam = true;
+        ss << "\n// //////// Entry Point Parameter Declarations ////////\n";
+        for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
+            std::stringstream paramDecl;
+            if (section->VisitEntryPointParameterDeclarations(paramDecl)) {
+                if(!firstParam) {
+                    ss << ",\n";
+                }
+                else {
+                    firstParam = false;
+                }
+                ss << paramDecl.str();
+            }
+        }
+        ss <<"){\n";
+        ss << _generatorShaderSections->GetScopeTypeName() << " "
+            << _generatorShaderSections->GetScopeInstanceName();
+    
+        if (hasContructorParams) {
+            ss << "(\n";
+            firstParam = true;
+            ss << "\n// //////// Scope Constructor Instantiation ////////\n";
+            for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
+                std::stringstream paramDecl;
+                if (section->VisitScopeConstructorInstantiation(paramDecl)) {
+                    if(!firstParam) {
+                        ss << ",\n";
+                    }
+                    else {
+                        firstParam = false;
+                    }
+                    ss << paramDecl.str();
+                }
+            }
+            ss << ")";
+        }
+        ss << ";\n";
+
+        // Execute all code that hooks into the entry point function
+        ss << "\n// //////// Entry Point Function Executions ////////\n";
+        if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
+            if (this->_GetShaderStage() == HgiShaderStageFragment) {
+                ss << _generatorShaderSections->GetScopeInstanceName()
+                    << ".discarded_fragment = false;\n";
+            }
+        }
+        for (const HgiMetalShaderSectionUniquePtr &section : *shaderSections) {
+            if (section->VisitEntryPointFunctionExecutions(
+                ss, _generatorShaderSections->GetScopeInstanceName())) {
+                ss << "\n";
+            }
+        }
+        if (_hgi->GetCapabilities()->requiresReturnAfterDiscard) {
+            if (this->_GetShaderStage() == HgiShaderStageFragment) {
+                ss << "if (" << _generatorShaderSections->GetScopeInstanceName()
+                    << ".discarded_fragment)\n";
+                ss << "{\n";
+                if (outputs) {
+                    ss << "    return {};\n";
+                } else {
+                    ss << "    return;\n";
+                }
+                ss << "}\n";
+            }
+        }
+        //return the instance of the shader entrypoint output type
+        if(outputs &&
+            (_GetShaderStage() != HgiShaderStagePostTessellationControl))
+        {
+            const std::string outputInstanceName =
                 _generatorShaderSections->GetOutputInstanceName();
-        ss << "return " << outputInstanceName << ";\n";
+            ss << "return " << outputInstanceName << ";\n";
+        }
+        else {
+            ss << _generatorShaderSections->GetScopeInstanceName() << ".main();\n";
+        }
+        ss << "}\n";
     }
-    else {
-        ss << _generatorShaderSections->GetScopeInstanceName() << ".main();\n";
-    }
-    ss << "}\n";
 }
 
 HgiMetalShaderSectionUniquePtrVector*

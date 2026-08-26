@@ -30,16 +30,23 @@ HgiVulkanShaderFunction::HgiVulkanShaderFunction(
     , _inflightBits(0)
 {
     VkShaderModuleCreateInfo shaderCreateInfo =
-        {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+    { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
 
     std::vector<unsigned int> spirv;
 
     const char* debugLbl = _descriptor.debugName.empty() ?
         "unknown" : _descriptor.debugName.c_str();
 
+    const char* shaderCode;
+
     HgiVulkanShaderGenerator shaderGenerator(hgi, desc);
-    shaderGenerator.Execute();
-    const char *shaderCode = shaderGenerator.GetGeneratedShaderCode();
+    // Ray tracing shaders should not run the code generator, at the moment.
+    if (desc.shaderStage == HgiShaderStageMiss || desc.shaderStage == HgiShaderStageRayGen || desc.shaderStage == HgiShaderStageClosestHit || desc.shaderStage == HgiShaderStageCallable || desc.shaderStage == HgiShaderStageAnyHit)
+        shaderCode = desc.shaderCode ? desc.shaderCode : "";
+    else {
+        shaderGenerator.Execute();
+        shaderCode = shaderGenerator.GetGeneratedShaderCode();
+    }
 
     // Compile shader and capture errors
     bool result = HgiVulkanCompileGLSL(

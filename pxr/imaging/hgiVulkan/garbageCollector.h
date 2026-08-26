@@ -12,6 +12,7 @@
 
 #include "pxr/imaging/hgi/hgi.h"
 #include "pxr/imaging/hgiVulkan/api.h"
+#include "pxr/imaging/hgiVulkan/accelerationStructure.h"
 
 #include <mutex>
 #include <vector>
@@ -36,7 +37,13 @@ using HgiVulkanResourceBindingsVector =
 using HgiVulkanGraphicsPipelineVector =
     std::vector<class HgiVulkanGraphicsPipeline*>;
 using HgiVulkanComputePipelineVector =
-    std::vector<class HgiVulkanComputePipeline*>;
+std::vector<class HgiVulkanComputePipeline*>;
+using HgiVulkanRayTracingPipelineVector =
+std::vector<class HgiVulkanRayTracingPipeline*>;
+using HgiVulkanAccelerationStructureVector =
+std::vector<class HgiVulkanAccelerationStructure*>;
+using HgiVulkanAccelerationStructureGeometryVector =
+std::vector<class HgiVulkanAccelerationStructureGeometry*>;
 
 
 /// \class HgiVulkanGarbageCollector
@@ -78,6 +85,9 @@ public:
     HgiVulkanGraphicsPipelineVector* GetGraphicsPipelineList();
     HGIVULKAN_API
     HgiVulkanComputePipelineVector* GetComputePipelineList();
+    HgiVulkanAccelerationStructureVector* GetAccelerationStructureList();
+    HgiVulkanAccelerationStructureGeometryVector* GetAccelerationStructureGeometryList();
+    HgiVulkanRayTracingPipelineVector* GetRayTracingPipelineList();
 
 private:
     HgiVulkanGarbageCollector & operator =
@@ -104,6 +114,9 @@ private:
     static std::vector<HgiVulkanResourceBindingsVector*> _resourceBindingsList;
     static std::vector<HgiVulkanGraphicsPipelineVector*> _graphicsPipelineList;
     static std::vector<HgiVulkanComputePipelineVector*> _computePipelineList;
+    static std::vector<HgiVulkanAccelerationStructureVector*> _accelerationStructureList;
+    static std::vector<HgiVulkanAccelerationStructureGeometryVector*> _accelerationStructureGeometryList;
+    static std::vector<HgiVulkanRayTracingPipelineVector*> _rayTracingPipelineList;
 
     bool _isDestroying;
 };

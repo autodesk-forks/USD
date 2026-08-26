@@ -16,6 +16,8 @@ pxr_library(hgiVulkan
         ${VULKAN_LIBS}
 
     PUBLIC_CLASSES
+        accelerationStructure
+        accelerationStructureCmds
         blitCmds
         buffer
         capabilities
@@ -34,6 +36,8 @@ pxr_library(hgiVulkan
         instance
         pipelineCache
         resourceBindings
+        rayTracingPipeline
+        rayTracingCmds
         sampler
         shaderCompiler
         shaderFunction

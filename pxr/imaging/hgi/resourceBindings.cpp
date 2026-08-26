@@ -48,6 +48,23 @@ bool operator!=(
     return !(lhs == rhs);
 }
 
+bool operator==(
+    const HgiAccelerationStructureBindDesc& lhs,
+    const HgiAccelerationStructureBindDesc& rhs)
+{
+    return lhs.accelerationStructures == rhs.accelerationStructures &&
+        lhs.resourceType == rhs.resourceType &&
+        lhs.bindingIndex == rhs.bindingIndex &&
+        lhs.stageUsage == rhs.stageUsage;
+}
+
+bool operator!=(
+    const HgiAccelerationStructureBindDesc& lhs,
+    const HgiAccelerationStructureBindDesc& rhs)
+{
+    return !(lhs == rhs);
+}
+
 HgiTextureBindDesc::HgiTextureBindDesc()
     : resourceType(HgiBindResourceTypeCombinedSamplerImage)
     , bindingIndex(0)

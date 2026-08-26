@@ -120,10 +120,21 @@ Hgi::CreateResourceBindings(HgiResourceBindingsDesc const& desc)
         HGI_TEST_CODING_ERROR(
             bufDesc.resourceType == HgiBindResourceTypeUniformBuffer ||
             bufDesc.resourceType == HgiBindResourceTypeStorageBuffer ||
-            bufDesc.resourceType == HgiBindResourceTypeTessFactors,
+            bufDesc.resourceType == HgiBindResourceTypeTessFactors ||
+            bufDesc.resourceType == HgiBindResourceTypeAccelerationStructure,
             "%s.buffers[%u]: Unknown buffer type to bind",
                 NOT_EMPTY_NAME(desc.debugName), i);
-        
+
+        // Acceleration structures don't use offset/size validation.
+        if (bufDesc.resourceType == HgiBindResourceTypeAccelerationStructure) {
+            for (uint32_t j = 0; j < bufDesc.buffers.size(); j++) {
+                HGI_TEST_CODING_ERROR(bufDesc.buffers[j],
+                    "%s.buffers[%u].buffers[%u] invalid",
+                        NOT_EMPTY_NAME(desc.debugName), i, j);
+            }
+            continue;
+        }
+
         uint32_t const offset = bufDesc.offsets.front();
         uint32_t const size = bufDesc.sizes.empty() ? 0 : bufDesc.sizes.front();
         HGI_TEST_CODING_ERROR(size != 0 || offset == 0,
@@ -141,6 +152,7 @@ Hgi::CreateResourceBindings(HgiResourceBindingsDesc const& desc)
         const HgiTextureBindDesc& texDesc = desc.textures[i];
 
         HGI_TEST_CODING_ERROR(
+            texDesc.resourceType == HgiBindResourceTypeSampler ||
             texDesc.resourceType == HgiBindResourceTypeSampledImage ||
             texDesc.resourceType == HgiBindResourceTypeCombinedSamplerImage ||
             texDesc.resourceType == HgiBindResourceTypeStorageImage,
@@ -176,7 +188,7 @@ Hgi::SubmitCmds(HgiCmds* cmds, HgiSubmitWaitType wait)
 }
 
 static Hgi*
-_MakeNewPlatformDefaultHgi()
+_MakeNewPlatformDefaultHgi(HgiDeviceCapabilities requirements)
 {
     TF_DEBUG(HGI_DEBUG_INSTANCE_CREATION).Msg("Attempting to create platform "
         "default Hgi\n");
@@ -199,12 +211,15 @@ _MakeNewPlatformDefaultHgi()
             return nullptr;
         #endif
 
-    if (TfGetEnvSetting(HGI_ENABLE_VULKAN)) {
+    // Vulkan backend requires HGI_ENABLE_VULKAN environment variable or HgiDeviceCapabilitiesBitsRayTracing set in requirements.
+    if ((requirements & HgiDeviceCapabilitiesBitsRayTracing) || TfGetEnvSetting(HGI_ENABLE_VULKAN)) {
         #if defined(PXR_VULKAN_SUPPORT_ENABLED)
             hgiType = "HgiVulkan";
+        #elif defined(PXR_METAL_SUPPORT_ENABLED)
+            hgiType = "HgiMetal";
         #else
             TF_CODING_ERROR(
-                "Build requires PXR_VULKAN_SUPPORT_ENABLED=true to use Vulkan");
+                "Build requires PXR_VULKAN_SUPPORT_ENABLED=true to use Vulkan or PXR_METAL_SUPPORT_ENABLED=true to use Metal");
         #endif
     }
 
@@ -273,7 +288,7 @@ _MakeNamedHgi(const TfToken& hgiToken)
         hgiType = "HgiMetal";
 #endif
     } else if (hgiToken.IsEmpty()) {
-        return _MakeNewPlatformDefaultHgi();
+        return _MakeNewPlatformDefaultHgi(0);
     } else {
         // If an invalid token is provided, return nullptr.
         TF_CODING_ERROR("Unsupported token %s was provided.",
@@ -334,13 +349,13 @@ Hgi::GetPlatformDefaultHgi()
     TF_WARN("GetPlatformDefaultHgi is deprecated. "
             "Please use CreatePlatformDefaultHgi");
 
-    return _MakeNewPlatformDefaultHgi();
+    return _MakeNewPlatformDefaultHgi(0);
 }
 
 HgiUniquePtr
-Hgi::CreatePlatformDefaultHgi()
+Hgi::CreatePlatformDefaultHgi(HgiDeviceCapabilities requirements)
 {
-    return HgiUniquePtr(_MakeNewPlatformDefaultHgi());
+    return HgiUniquePtr(_MakeNewPlatformDefaultHgi(requirements));
 }
 
 HgiUniquePtr 

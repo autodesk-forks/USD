@@ -342,7 +342,7 @@ HgiVulkanGraphicsPipeline::HgiVulkanGraphicsPipeline(
     //
     // Generate Pipeline layout
     //
-    bool usePushConstants = desc.shaderConstantsDesc.byteSize > 0;
+    bool usePushConstants = false;// desc.shaderConstantsDesc.byteSize > 0;
     VkPushConstantRange pcRanges;
     if (usePushConstants) {
         TF_VERIFY(desc.shaderConstantsDesc.byteSize % 4 == 0,

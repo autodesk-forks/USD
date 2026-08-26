@@ -22,6 +22,7 @@
 #include "pxr/imaging/hgiMetal/shaderFunction.h"
 #include "pxr/imaging/hgiMetal/shaderProgram.h"
 #include "pxr/imaging/hgiMetal/texture.h"
+#include "pxr/imaging/hgiMetal/accelerationStructure.h"
 
 #include "pxr/base/trace/trace.h"
 
@@ -197,6 +198,20 @@ HgiMetal::CreateBlitCmds()
     return HgiBlitCmdsUniquePtr(blitCmds);
 }
 
+HgiAccelerationStructureCmdsUniquePtr
+HgiMetal::CreateAccelerationStructureCmds()
+{
+    HgiMetalAccelerationStructureCmds* cmds(new HgiMetalAccelerationStructureCmds(this));
+    return HgiAccelerationStructureCmdsUniquePtr(cmds);
+}
+
+HgiRayTracingCmdsUniquePtr
+HgiMetal::CreateRayTracingCmds()
+{
+    HgiMetalRayTracingCmds* cmds(new HgiMetalRayTracingCmds(this));
+    return HgiRayTracingCmdsUniquePtr(cmds);
+}
+
 HgiTextureHandle
 HgiMetal::_CreateTexture(HgiTextureDesc const & desc)
 {
@@ -329,6 +344,19 @@ HgiMetal::DestroyComputePipeline(HgiComputePipelineHandle* pipeHandle)
     _TrashObject(pipeHandle);
 }
 
+HgiRayTracingPipelineHandle
+HgiMetal::CreateRayTracingPipeline(HgiRayTracingPipelineDesc const& desc)
+{
+    return HgiRayTracingPipelineHandle(
+       new HgiMetalRayTracingPipeline(this, desc), GetUniqueId());
+}
+
+void
+HgiMetal::DestroyRayTracingPipeline(HgiRayTracingPipelineHandle* pipeHandle)
+{
+    // TrashObject(pipeHandle, GetGarbageCollector()->GetRayTracingPipelineList());
+}
+
 TfToken const&
 HgiMetal::GetAPIName() const {
     return HgiTokens->Metal;
@@ -376,6 +404,37 @@ HgiMetal::EndFrame()
 void
 HgiMetal::GarbageCollect()
 {
+}
+
+HgiAccelerationStructureHandle HgiMetal::CreateAccelerationStructure(HgiAccelerationStructureDesc const& desc) 
+{
+     return HgiAccelerationStructureHandle(
+         new HgiMetalAccelerationStructure(this, desc),
+         GetUniqueId());
+}
+
+void HgiMetal::DestroyAccelerationStructure(HgiAccelerationStructureHandle* accelStructHandle) 
+{
+    delete accelStructHandle->Get();
+}
+
+HgiAccelerationStructureGeometryHandle HgiMetal::CreateAccelerationStructureGeometry(HgiAccelerationStructureTriangleGeometryDesc const& desc) 
+{
+    return HgiAccelerationStructureGeometryHandle(
+        new HgiMetalAccelerationStructureGeometry(this, desc),
+        GetUniqueId());
+}
+
+HgiAccelerationStructureGeometryHandle HgiMetal::CreateAccelerationStructureGeometry(HgiAccelerationStructureInstanceGeometryDesc const& desc)
+{
+    return HgiAccelerationStructureGeometryHandle(
+        new HgiMetalAccelerationStructureGeometry(this, desc),
+        GetUniqueId());
+}
+
+void HgiMetal::DestroyAccelerationStructureGeometry(HgiAccelerationStructureGeometryHandle* accelStructHandle) 
+{
+    delete accelStructHandle->Get();
 }
 
 id<MTLCommandQueue>

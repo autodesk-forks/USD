@@ -32,18 +32,18 @@ class HgiVulkanDevice final
 {
 public:
     HGIVULKAN_API
-    HgiVulkanDevice(HgiVulkanInstance* instance);
+        HgiVulkanDevice(HgiVulkanInstance* instance);
 
     HGIVULKAN_API
-    ~HgiVulkanDevice();
+        ~HgiVulkanDevice();
 
     /// Returns the vulkan device
     HGIVULKAN_API
-    VkDevice GetVulkanDevice() const;
+        VkDevice GetVulkanDevice() const;
 
     /// Returns the vulkan memory allocator.
     HGIVULKAN_API
-    VmaAllocator GetVulkanMemoryAllocator() const;
+        VmaAllocator GetVulkanMemoryAllocator() const;
 
     /// Returns a VMA pool for images that use API Interop.
     HGIVULKAN_API
@@ -56,29 +56,35 @@ public:
 
     /// Returns the command queue which manages command buffers submission.
     HGIVULKAN_API
-    HgiVulkanCommandQueue* GetCommandQueue() const;
+        HgiVulkanCommandQueue* GetCommandQueue() const;
 
     /// Returns the device capablities / features it supports.
     HGIVULKAN_API
-    HgiVulkanCapabilities const& GetDeviceCapabilities() const;
+        HgiVulkanCapabilities const& GetDeviceCapabilities() const;
 
     /// Returns the type (or family index) for the graphics queue.
     HGIVULKAN_API
-    uint32_t GetGfxQueueFamilyIndex() const;
+        uint32_t GetGfxQueueFamilyIndex() const;
 
     /// Returns vulkan physical device
     HGIVULKAN_API
-    VkPhysicalDevice GetVulkanPhysicalDevice() const;
+        VkPhysicalDevice GetVulkanPhysicalDevice() const;
 
     /// Returns the pipeline cache.
     HGIVULKAN_API
-    HgiVulkanPipelineCache* GetPipelineCache() const;
+        HgiVulkanPipelineCache* GetPipelineCache() const;
 
     /// Wait for all queued up commands to have been processed on device.
     /// This should ideally never be used as it creates very big stalls, but
     /// is useful for unit testing.
     HGIVULKAN_API
-    void WaitForIdle();
+        void WaitForIdle();
+
+    HGIVULKAN_API
+        const VkPhysicalDeviceRayTracingPipelinePropertiesKHR& GetRayTracingPipelineProperties();
+
+    HGIVULKAN_API
+        const VkPhysicalDeviceAccelerationStructureFeaturesKHR& GetAccelerationStructureFeatures();
 
     /// Returns true if the provided extension is supported by the device
     bool IsSupportedExtension(const char* extensionName) const;
@@ -106,10 +112,19 @@ public:
     PFN_vkQueueEndDebugUtilsLabelEXT vkQueueEndDebugUtilsLabelEXT = nullptr;
     PFN_vkTransitionImageLayoutEXT vkTransitionImageLayoutEXT = nullptr;
     PFN_vkCopyMemoryToImageEXT vkCopyMemoryToImageEXT = nullptr;
+    PFN_vkGetBufferDeviceAddressKHR vkGetBufferDeviceAddressKHR = nullptr;
+    PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHR = nullptr;
+    PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR = nullptr;
+    PFN_vkGetAccelerationStructureBuildSizesKHR vkGetAccelerationStructureBuildSizesKHR = nullptr;
+    PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR = nullptr;
+    PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR = nullptr;
+    PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelinesKHR = nullptr;
+    PFN_vkGetRayTracingShaderGroupHandlesKHR vkGetRayTracingShaderGroupHandlesKHR = nullptr;
+    PFN_vkCmdTraceRaysKHR vkCmdTraceRaysKHR = nullptr;
 
 private:
     HgiVulkanDevice() = delete;
-    HgiVulkanDevice & operator=(const HgiVulkanDevice&) = delete;
+    HgiVulkanDevice& operator=(const HgiVulkanDevice&) = delete;
     HgiVulkanDevice(const HgiVulkanDevice&) = delete;
 
     // Vulkan device objects
@@ -129,6 +144,9 @@ private:
     HgiVulkanCommandQueue* _commandQueue;
     HgiVulkanCapabilities* _capabilities;
     HgiVulkanPipelineCache* _pipelineCache;
+
+    VkPhysicalDeviceRayTracingPipelinePropertiesKHR  _rayTracingPipelineProperties = {};
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR _accelerationStructureFeatures = {};
 };
 
 

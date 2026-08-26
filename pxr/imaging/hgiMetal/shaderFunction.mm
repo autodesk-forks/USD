@@ -17,21 +17,63 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+//#define DUMP_DEBUG_SHADER_FILES_AND_ERRORS (1)
+
 HgiMetalShaderFunction::HgiMetalShaderFunction(
     HgiMetal *hgi,
     HgiShaderFunctionDesc const& desc)
   : HgiShaderFunction(desc)
   , _shaderId(nil)
 {
-    if (desc.shaderCode) {
+    if(desc.shaderByteCodeLength != -1) {
+        dispatch_data_t data = dispatch_data_create(desc.shaderByteCode, 
+                                                    desc.shaderByteCodeLength, 
+                                                    nullptr, 
+                                                    DISPATCH_DATA_DESTRUCTOR_DEFAULT);
+        NSError *error = NULL;
+        id<MTLLibrary> library =
+            [hgi->GetPrimaryDevice() newLibraryWithData:data
+                                                  error:&error];
+        if (library) {
+            NSString *entryPoint = [NSString stringWithUTF8String:_descriptor.debugName.c_str()];
+            _shaderId = [library newFunctionWithName:entryPoint];
+            if (!_shaderId) {
+                _errors = [[NSString stringWithFormat:@"Function '%s' isn't found in the library", _descriptor.debugName.c_str()] UTF8String];
+            }
+            else {
+                HGIMETAL_DEBUG_LABEL(_shaderId, _descriptor.debugName.c_str());
+            }
+            [library release];
+        }
+        else {
+            NSString *err = [error localizedDescription];
+            _errors = [err UTF8String];
+        }
+    }
+    else if (desc.shaderCode) {
+
+#if defined(DUMP_DEBUG_SHADER_FILES_AND_ERRORS)
+        {
+            FILE* dumpFile;
+            dumpFile = fopen("/tmp/usd_lastShaderRaw.glsl","w");
+            if(dumpFile) {
+                fwrite(desc.shaderCode, strlen(desc.shaderCode), 1, dumpFile);
+                fclose(dumpFile);
+            }
+        }
+#endif // defined(DUMP_DEBUG_SHADER_FILES_AND_ERRORS)
+
         HgiMetalShaderGenerator shaderGenerator(hgi, desc);
         shaderGenerator.Execute();
         const char *shaderCode = shaderGenerator.GetGeneratedShaderCode();
 
         MTLCompileOptions *options = [[MTLCompileOptions alloc] init];
-        options.fastMathEnabled = YES;
+        options.fastMathEnabled = NO;
+//        options.optimizationLevel = ;
 
-        if (@available(macOS 10.15, ios 13.0, *)) {
+        if (@available(macOS 14.0, ios 17.0, *)) {
+            options.languageVersion = MTLLanguageVersion3_1;
+        } else if (@available(macOS 10.15, ios 13.0, *)) {
             options.languageVersion = MTLLanguageVersion2_3;
         } else {
             options.languageVersion = MTLLanguageVersion2_1;
@@ -46,6 +88,28 @@ HgiMetalShaderFunction::HgiMetalShaderFunction(
             [hgi->GetPrimaryDevice() newLibraryWithSource:@(shaderCode)
                                                         options:options
                                                         error:&error];
+        
+#if defined(DUMP_DEBUG_SHADER_FILES_AND_ERRORS)
+        FILE* dumpFile;
+        if(error) {
+            dumpFile = fopen("/tmp/usd_lastShaderWithError.metal","w");
+        }
+        else {
+            dumpFile = fopen("/tmp/usd_lastShader.metal","w");
+        }
+        if(dumpFile) {
+            if(error) {
+                const char* errorHdr = "\t/* ### Start Errors ###";
+                fwrite(errorHdr, strlen(errorHdr), 1, dumpFile);
+                const char* errorString = [error.localizedDescription UTF8String];
+                fwrite(errorString, strlen(errorString), 1, dumpFile);
+                const char* errorFtr = "\t   ### End Errors ### */";
+                fwrite(errorFtr, strlen(errorFtr), 1, dumpFile);
+            }
+            fwrite(shaderCode, strlen(shaderCode), 1, dumpFile);
+            fclose(dumpFile);
+        }
+#endif // defined(DUMP_DEBUG_SHADER_FILES_AND_ERRORS)
 
         [options release];
         options = nil;
@@ -66,6 +130,14 @@ HgiMetalShaderFunction::HgiMetalShaderFunction(
                 break;
             case HgiShaderStagePostTessellationVertex:
                 entryPoint = @"vertexEntryPoint";
+                break;
+            case HgiShaderStageRayGen:
+            case HgiShaderStageAnyHit:
+            case HgiShaderStageClosestHit:
+            case HgiShaderStageMiss:
+            case HgiShaderStageIntersection:
+            case HgiShaderStageCallable:
+                entryPoint = [NSString stringWithUTF8String:_descriptor.debugName.c_str()];
                 break;
             case HgiShaderStageTessellationControl:
             case HgiShaderStageTessellationEval:

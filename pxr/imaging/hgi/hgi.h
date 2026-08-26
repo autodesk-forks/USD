@@ -11,6 +11,8 @@
 #include "pxr/base/tf/token.h"
 #include "pxr/base/tf/type.h"
 
+#include "pxr/imaging/hgi/accelerationStructure.h"
+#include "pxr/imaging/hgi/accelerationStructureCmds.h"
 #include "pxr/imaging/hgi/api.h"
 #include "pxr/imaging/hgi/blitCmds.h"
 #include "pxr/imaging/hgi/buffer.h"
@@ -20,6 +22,8 @@
 #include "pxr/imaging/hgi/graphicsCmdsDesc.h"
 #include "pxr/imaging/hgi/graphicsPipeline.h"
 #include "pxr/imaging/hgi/resourceBindings.h"
+#include "pxr/imaging/hgi/rayTracingCmds.h"
+#include "pxr/imaging/hgi/rayTracingPipeline.h"
 #include "pxr/imaging/hgi/sampler.h"
 #include "pxr/imaging/hgi/shaderFunction.h"
 #include "pxr/imaging/hgi/shaderProgram.h"
@@ -121,9 +125,10 @@ public:
     /// For example on Linux this may return HgiGL while on macOS HgiMetal.
     /// Caller, usually the application, owns the lifetime of the Hgi object and
     /// the object is destroyed when the caller drops the unique ptr.
+    /// If requirements is non-zero an attempt will be made to provide a Hgi object supporting those capabilities.
     /// Thread safety: Not thread safe.
     HGI_API
-    static HgiUniquePtr CreatePlatformDefaultHgi();
+    static HgiUniquePtr CreatePlatformDefaultHgi(HgiDeviceCapabilities requirements = 0);
 
     /// Helper function to return a Hgi object of choice supported by current 
     /// platform and build configuration.
@@ -186,6 +191,38 @@ public:
     HGI_API
     virtual HgiComputeCmdsUniquePtr CreateComputeCmds(
         HgiComputeCmdsDesc const& desc) = 0;
+
+    HGI_API
+        virtual HgiAccelerationStructureCmdsUniquePtr CreateAccelerationStructureCmds() { return nullptr; }
+
+    HGI_API
+        virtual HgiRayTracingCmdsUniquePtr CreateRayTracingCmds() { return nullptr; }
+
+    /// Create an acceleration structure in rendering backend.
+    /// Thread safety: Creation must happen on main thread. See notes above.
+    HGI_API
+        virtual HgiAccelerationStructureHandle CreateAccelerationStructure(HgiAccelerationStructureDesc const& /*desc*/) { return HgiAccelerationStructureHandle(); }
+
+    /// Destroyan acceleration structure in rendering backend.
+    /// Thread safety: Destruction must happen on main thread. See notes above.
+    HGI_API
+        virtual void DestroyAccelerationStructure(HgiAccelerationStructureHandle* /*accelStructHandle*/) {};
+
+    /// Create an acceleration structure in rendering backend.
+/// Thread safety: Creation must happen on main thread. See notes above.
+    HGI_API
+        virtual HgiAccelerationStructureGeometryHandle CreateAccelerationStructureGeometry(HgiAccelerationStructureTriangleGeometryDesc const& /*desc*/) { return HgiAccelerationStructureGeometryHandle(); }
+
+
+    /// Create an acceleration structure in rendering backend.
+/// Thread safety: Creation must happen on main thread. See notes above.
+    HGI_API
+        virtual HgiAccelerationStructureGeometryHandle CreateAccelerationStructureGeometry(HgiAccelerationStructureInstanceGeometryDesc const& /*desc*/) { return HgiAccelerationStructureGeometryHandle(); }
+
+    /// Destroyan acceleration structure in rendering backend.
+    /// Thread safety: Destruction must happen on main thread. See notes above.
+    HGI_API
+        virtual void DestroyAccelerationStructureGeometry(HgiAccelerationStructureGeometryHandle* /*accelStructHandle*/) {};
 
     /// Create a texture in rendering backend.
     /// Thread safety: Creation must happen on main thread. See notes above.
@@ -293,6 +330,20 @@ public:
     /// Thread safety: Destruction must happen on main thread. See notes above.
     HGI_API
     virtual void DestroyComputePipeline(HgiComputePipelineHandle* pipeHandle)=0;
+
+
+    /// Create a new compute pipeline state object.
+    /// Thread safety: Creation must happen on main thread. See notes above.
+    HGI_API
+        virtual HgiRayTracingPipelineHandle CreateRayTracingPipeline(
+            HgiRayTracingPipelineDesc const& /*pipeDesc*/) {
+        return HgiRayTracingPipelineHandle();
+    }
+
+    /// Destroy a compute pipeline state object.
+    /// Thread safety: Destruction must happen on main thread. See notes above.
+    HGI_API
+        virtual void DestroyRayTracingPipeline(HgiRayTracingPipelineHandle* /*pipeHandle*/) {}
 
     /// Return the name of the api (e.g. "OpenGL").
     /// Thread safety: This call is thread safe.

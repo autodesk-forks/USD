@@ -45,6 +45,14 @@ public:
     HGIVULKAN_API
     uint64_t & GetInflightBits();
 
+    HGIVULKAN_API
+        VkDescriptorPool GetDescriptorPool() { return _vkDescriptorPool; }
+
+    HGIVULKAN_API
+        VkDescriptorSetLayout GetDescriptorSetLayout() { return _vkDescriptorSetLayout; }
+
+    HGIVULKAN_API
+        VkDescriptorSet GetDescriptorSet() { return _vkDescriptorSet; }
 protected:
     friend class HgiVulkan;
 
