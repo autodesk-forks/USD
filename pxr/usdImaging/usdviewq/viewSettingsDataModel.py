@@ -116,8 +116,8 @@ class ViewSettingsDataModel(StateSource, QtCore.QObject):
     signalStyleSettingsChanged = QtCore.Signal()
 
     def __init__(self, rootDataModel, parent):
-        QtCore.QObject.__init__(self)
         StateSource.__init__(self, parent, "model")
+        QtCore.QObject.__init__(self)
 
         self._rootDataModel = rootDataModel
 

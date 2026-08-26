@@ -20,6 +20,9 @@
 #include "pxr/usd/sdr/shaderProperty.h"
 #include "pxr/usd/sdf/valueTypeName.h"
 
+// When python support is OFF, Linux breaks with missing headers of std::transform and std::find
+// Include algorithm here to avoid multiple including on shaderMetadataHelpers.cpp and shaderNode.cpp
+#include <algorithm>
 #include <limits>
 
 PXR_NAMESPACE_OPEN_SCOPE

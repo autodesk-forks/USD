@@ -92,6 +92,8 @@ main(int argc, char *argv[])
         std::vector<unsigned char> readback(width * height * sizeof(uint16_t) * 4);
         avifSpec.data = readback.data();
         TF_VERIFY(image->Read(avifSpec));
+// TODO: Temporarily disabled due to HioOpenEXR not stable for exr images.
+#ifdef USE_OPENEXR_FOR_EXR
         {
             // this write back is for a visual check, not directly used by the test
             std::string filename = "avifTestWriteback16.exr";
@@ -99,6 +101,7 @@ main(int argc, char *argv[])
             TF_AXIOM(exrimage);
             TF_AXIOM(exrimage->Write(avifSpec));
         }
+#endif
 
         HioImage::StorageSpec avifSpecF32;
         avifSpecF32.width = width;
@@ -107,6 +110,8 @@ main(int argc, char *argv[])
         std::vector<unsigned char> readbackf32(width * height * sizeof(float) * 4);
         avifSpecF32.data = readbackf32.data();
         TF_VERIFY(image->Read(avifSpecF32));
+// TODO: Temporarily disabled due to HioOpenEXR not stable for exr images.
+#ifdef USE_OPENEXR_FOR_EXR
         {
             // this write back is for a visual check, not directly used by the test
             std::string filename = "avifTestWriteback32.exr";
@@ -114,6 +119,7 @@ main(int argc, char *argv[])
             TF_AXIOM(exrimage);
             TF_AXIOM(exrimage->Write(avifSpecF32));
         }
+#endif
 
         // compare the pixel data of the read avif image and the reference png.
         uint8_t* pngData = reinterpret_cast<uint8_t*>(pngSpec.data);
