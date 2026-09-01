@@ -150,6 +150,7 @@ pxr_library(hd
         points
         prefixingSceneIndex
         primGather
+        primIdSchema
         primOriginSchema
         primTypeIndex
         primvarSchema
@@ -172,6 +173,7 @@ pxr_library(hd
         renderPassSchema
         renderPassState
         renderProductSchema
+        renderSettingDescriptorSchema
         renderSettings
         renderSettingsSchema
         renderVarSchema
