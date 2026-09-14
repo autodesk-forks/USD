@@ -3506,12 +3506,30 @@ CrateFile::_ReadFields(Reader reader)
 {
     TfAutoMallocTag tag("_ReadFields");
     if (auto fieldsSection = _toc.GetSection(_FieldsSectionName)) {
-        reader.Seek(fieldsSection->start);
         if (Version(_boot.version) < Version(0,4,0)) {
+            reader.Seek(fieldsSection->start);
             _fields = reader.template Read<decltype(_fields)>();
         } else {
             // Compressed fields in 0.4.0.
+            if (fieldsSection->start < 0 || fieldsSection->size < 0 ||
+                fieldsSection->size >
+                    std::numeric_limits<int64_t>::max() -
+                    fieldsSection->start) {
+                PXR_TF_THROW(SdfReadOutOfBoundsError, TfStringPrintf(
+                    "Corrupt crate file @%s@: invalid fields section range "
+                    "(start=%" PRId64 ", size=%" PRId64 ")",
+                    _assetPath.c_str(), fieldsSection->start,
+                    fieldsSection->size));
+            }
+            reader.Seek(fieldsSection->start);
             auto numFields = reader.template Read<uint64_t>();
+            // Ensure numFields is within reasonable (coarse) bounds.
+            if (numFields > static_cast<uint64_t>(fieldsSection->size)) {
+                PXR_TF_THROW(SdfReadOutOfBoundsError, TfStringPrintf(
+                    "Corrupt crate file @%s@: invalid numFields (%" PRIu64
+                    "), section size is (%" PRId64 ")",
+                    _assetPath.c_str(), numFields, fieldsSection->size));
+            }
             _fields.resize(numFields);
             vector<uint32_t> tmp(numFields);
             if (!_ReadCompressedInts(reader, tmp.data(), tmp.size())) {
@@ -3524,6 +3542,17 @@ CrateFile::_ReadFields(Reader reader)
 
             // Compressed value reps.
             uint64_t repsSize = reader.template Read<uint64_t>();
+            auto sectionEnd = fieldsSection->start + fieldsSection->size;
+            auto currentOffset = reader.src.Tell();
+            if (currentOffset > sectionEnd ||
+                repsSize > static_cast<uint64_t>(sectionEnd - currentOffset)) {
+                PXR_TF_THROW(SdfReadOutOfBoundsError, TfStringPrintf(
+                    "Corrupt crate file @%s@: compressed value reps size "
+                    "(%" PRIu64 ") exceeds remaining fields section "
+                    "size (%" PRId64 ")",
+                    _assetPath.c_str(), repsSize,
+                    sectionEnd - currentOffset));
+            }
             std::unique_ptr<char[]> compBuffer(new char[repsSize]);
             reader.ReadContiguous(compBuffer.get(), repsSize);
             vector<uint64_t> repsData;
