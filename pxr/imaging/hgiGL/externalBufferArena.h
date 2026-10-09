@@ -104,21 +104,30 @@ public:
     /// ownership: the arena binds and reads it, and never deletes it. This is
     /// the entry point for an application-owned, pooled viewport buffer. See
     /// the ownership notes above for the contract it carries.
+    ///
+    /// \p vertexStride is recorded on the buffer's HgiBufferDesc. HgiGL binds a
+    /// vertex buffer with the stride on its descriptor (glBindVertexBuffer,
+    /// where 0 does not mean tightly packed), so a consumer that binds this
+    /// buffer in place as vertex input needs it set to the stream's stride.
+    /// Leave it 0 when the buffer is not read as vertex input.
     HGIGL_API
     HgiExternalBufferSharedPtr RegisterBuffer(
         uint32_t bufferId,
         size_t byteSize,
-        HgiBufferUsage usage);
+        HgiBufferUsage usage,
+        uint32_t vertexStride = 0);
 
     /// Hand the existing GL buffer \p bufferId over to the arena, which will
     /// delete it once nothing references it and the GPU has retired the work
     /// that named it. Only correct for a buffer the application will never
-    /// touch again; use RegisterBuffer otherwise.
+    /// touch again; use RegisterBuffer otherwise. \p vertexStride as for
+    /// RegisterBuffer.
     HGIGL_API
     HgiExternalBufferSharedPtr AdoptBuffer(
         uint32_t bufferId,
         size_t byteSize,
-        HgiBufferUsage usage);
+        HgiBufferUsage usage,
+        uint32_t vertexStride = 0);
 
     /// Import the foreign allocation described by \p desc and bind a GL buffer
     /// over it. Returns null when this GL implementation cannot import

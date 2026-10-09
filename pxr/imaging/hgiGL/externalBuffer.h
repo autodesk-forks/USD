@@ -58,6 +58,11 @@ struct HgiGLImportBufferDesc
     /// What the consumer may bind the resulting buffer for.
     HgiBufferUsage usage = 0;
 
+    /// Recorded on the buffer's HgiBufferDesc; see
+    /// HgiGLExternalBufferArena::RegisterBuffer. 0 when the buffer is not read
+    /// as vertex input.
+    uint32_t vertexStride = 0;
+
     std::string debugName;
 };
 
@@ -120,6 +125,7 @@ private:
         uint32_t bufferId,
         size_t byteSize,
         HgiBufferUsage usage,
+        uint32_t vertexStride,
         bool takeOwnership);
 
     // Import a foreign allocation and bind a GL buffer over it. Returns null
@@ -135,6 +141,7 @@ private:
         uint32_t bufferId,
         size_t byteSize,
         HgiBufferUsage usage,
+        uint32_t vertexStride,
         bool ownsBufferId,
         uint32_t memoryObjectId);
 

@@ -22,6 +22,7 @@ HgiGLExternalBuffer::HgiGLExternalBuffer(
     uint32_t bufferId,
     size_t byteSize,
     HgiBufferUsage usage,
+    uint32_t vertexStride,
     bool ownsBufferId,
     uint32_t memoryObjectId)
     : HgiExternalBuffer(arena, byteSize)
@@ -32,6 +33,7 @@ HgiGLExternalBuffer::HgiGLExternalBuffer(
     HgiBufferDesc desc;
     desc.byteSize = byteSize;
     desc.usage = usage;
+    desc.vertexStride = vertexStride;
     desc.debugName = "HgiGLExternalBuffer";
     // Adopting: the HgiGLBuffer wrapper never deletes the name, so deletion
     // stays a decision of this object (see _ownsBufferId).
@@ -105,7 +107,7 @@ HgiGLExternalBuffer::_CreateAllocated(
     HGIGL_POST_PENDING_GL_ERRORS();
 
     return HgiExternalBufferSharedPtr(new HgiGLExternalBuffer(
-        arena, handleId, bufferId, byteSize, usage,
+        arena, handleId, bufferId, byteSize, usage, /*vertexStride*/ 0,
         /*ownsBufferId*/ true, /*memoryObjectId*/ 0));
 }
 
@@ -116,6 +118,7 @@ HgiGLExternalBuffer::_CreateAdopted(
     uint32_t bufferId,
     size_t byteSize,
     HgiBufferUsage usage,
+    uint32_t vertexStride,
     bool takeOwnership)
 {
     if (!bufferId || byteSize == 0) {
@@ -123,7 +126,7 @@ HgiGLExternalBuffer::_CreateAdopted(
     }
 
     return HgiExternalBufferSharedPtr(new HgiGLExternalBuffer(
-        arena, handleId, bufferId, byteSize, usage,
+        arena, handleId, bufferId, byteSize, usage, vertexStride,
         takeOwnership, /*memoryObjectId*/ 0));
 }
 
@@ -232,7 +235,7 @@ HgiGLExternalBuffer::_CreateImported(
     HGIGL_POST_PENDING_GL_ERRORS();
 
     return HgiExternalBufferSharedPtr(new HgiGLExternalBuffer(
-        arena, handleId, bufferId, desc.byteSize, desc.usage,
+        arena, handleId, bufferId, desc.byteSize, desc.usage, desc.vertexStride,
         /*ownsBufferId*/ true, memoryObjectId));
 }
 

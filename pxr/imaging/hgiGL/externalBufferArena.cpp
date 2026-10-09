@@ -49,28 +49,30 @@ HgiExternalBufferSharedPtr
 HgiGLExternalBufferArena::RegisterBuffer(
     uint32_t bufferId,
     size_t byteSize,
-    HgiBufferUsage usage)
+    HgiBufferUsage usage,
+    uint32_t vertexStride)
 {
     if (!GetHgi()) {
         return nullptr;
     }
     return _Register(HgiGLExternalBuffer::_CreateAdopted(
         this, _GetNextBufferHandleId(), bufferId, byteSize, usage,
-        /*takeOwnership*/ false));
+        vertexStride, /*takeOwnership*/ false));
 }
 
 HgiExternalBufferSharedPtr
 HgiGLExternalBufferArena::AdoptBuffer(
     uint32_t bufferId,
     size_t byteSize,
-    HgiBufferUsage usage)
+    HgiBufferUsage usage,
+    uint32_t vertexStride)
 {
     if (!GetHgi()) {
         return nullptr;
     }
     return _Register(HgiGLExternalBuffer::_CreateAdopted(
         this, _GetNextBufferHandleId(), bufferId, byteSize, usage,
-        /*takeOwnership*/ true));
+        vertexStride, /*takeOwnership*/ true));
 }
 
 HgiExternalBufferSharedPtr
