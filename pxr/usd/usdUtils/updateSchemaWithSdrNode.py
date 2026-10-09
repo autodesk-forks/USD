@@ -521,7 +521,7 @@ def UpdateSchemaWithSdrNode(schemaLayer, sdrNode, renderContext="",
     schemaName = sdrNodeMetadata[SchemaDefiningKeys.SCHEMA_NAME]
     if not Tf.IsValidIdentifier(schemaName):
         Tf.RaiseRuntimeError("schemaName (%s) is an invalid identifier; "
-                "Provide a valid USD identifer for schemaName, example (%s) "
+                "Provide a valid USD identifier for schemaName, example (%s) "
                 %(schemaName, Tf.MakeValidIdentifier(schemaName)))
 
     tfTypeNameSuffix = None
@@ -831,8 +831,8 @@ def UpdateSchemaWithSdrNode(schemaLayer, sdrNode, renderContext="",
             schemaPropertyNSPrefixOverride is None or \
             _IsNSPrefixConnectableAPICompliant(schemaPropertyNSPrefixOverride)):
         # We must add shaderId for all shaderNodes with the same identifier
-        # across all sourceTypes, so that we get appropriate
-        # renderContext:sourceType:shaderId attribute.
+        # across all shadingSystem, so that we get appropriate
+        # renderContext:shadingSystem:shaderId attribute.
         sdrRegistry = Sdr.Registry()
         shaderNodesForShaderIdAttrs = [
             node for node in sdrRegistry.GetShaderNodesByIdentifier(

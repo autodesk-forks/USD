@@ -6,11 +6,12 @@
 //
 #include "pxr/pxr.h"
 #include "pxr/imaging/hdSt/implicitSurfaceShaderKey.h"
+#include "pxr/imaging/hdSt/tokens.h"
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/staticTokens.h"
 
-#include <utility>
+#include <unordered_map>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -34,16 +35,30 @@ TF_DEFINE_PRIVATE_TOKENS(
     ((edgeIdNoneFS,             "EdgeId.Fragment.None"))
 
     // shape-agnostic type defs and utils shared by every shape module
-    ((typeDef,                  "ImplicitSurface.TypeDef"))
+    ((commonConstants,          "ImplicitSurface.Common.Constants"))
+    ((vertexTypeDef,            "ImplicitSurface.Vertex.TypeDef"))
+    ((fragmentTypeDef,          "ImplicitSurface.Fragment.TypeDef"))
     ((vertUtils,                "ImplicitSurface.Vertex.Utils"))
     ((fragUtils,                "ImplicitSurface.Fragment.Utils"))
 
     // shape-specific mixins (must precede the main mixins)
     ((sphereTypeDef,            "ImplicitSurface.TypeDef.Sphere"))
+    ((sphereCommon,             "ImplicitSurface.Common.Sphere"))
     ((sphereBounds,             "ImplicitSurface.Bounds.Sphere"))
     ((sphereIntersection,       "ImplicitSurface.Intersection.Sphere"))
     ((sphereVertex,             "ImplicitSurface.Vertex.Sphere"))
     ((sphereFragment,           "ImplicitSurface.Fragment.Sphere"))
+
+    ((conicalTypeDef,           "ImplicitSurface.TypeDef.ConicalFrustum"))
+    ((conicalCommon,            "ImplicitSurface.Common.ConicalFrustum"))
+    ((conicalBounds,            "ImplicitSurface.Bounds.ConicalFrustum"))
+    ((conicalIntersection,      "ImplicitSurface.Intersection.ConicalFrustum"))
+    ((conicalVertex,            "ImplicitSurface.Vertex.ConicalFrustum"))
+    ((conicalFragment,          "ImplicitSurface.Fragment.ConicalFrustum"))
+
+    ((capsuleCommon,            "ImplicitSurface.Common.Capsule"))
+    ((capsuleVertex,            "ImplicitSurface.Vertex.Capsule"))
+    ((capsuleFragment,          "ImplicitSurface.Fragment.Capsule"))
 
     // main for all the shader stages
     ((mainVS,                   "ImplicitSurface.Vertex"))
@@ -90,37 +105,66 @@ const TfToken _NormalsToken(const bool doubleSided)
     }
 }
 
-// The set of glslfx sections a shape module must supply.
+// The set of glslfx sections for a shape module.
 struct _ShapeSections
 {
-    TfToken typeDef;
-    TfToken bounds;
-    TfToken intersection;
+    // optional: added to both stages, before common
+    TfSmallVector<TfToken, 2> commonExtras;
+
+    // required: added to both stages before ImplicitSurface.<Stage>.TypeDef
+    TfToken common;
+
+    // optional: added to VS only, before vertexGlue
+    TfSmallVector<TfToken, 2> vsExtras;
+
+    // required: added to VS only
     TfToken vertexGlue;
+
+    // optional: added to FS only, before fragmentGlue
+    TfSmallVector<TfToken, 2> fsExtras;
+
+    // required: added to FS only
     TfToken fragmentGlue;
 };
 
 const _ShapeSections &_GetShapeSections(TfToken const &primType)
 {
-    static const std::pair<TfToken, _ShapeSections> shapeTable[] = {
-        { HdPrimTypeTokens->sphere,
-          { _tokens->sphereTypeDef,
-            _tokens->sphereBounds,
-            _tokens->sphereIntersection,
+    static const std::unordered_map<TfToken, _ShapeSections,
+                                    TfToken::HashFunctor> shapeMap = {
+        { HdStNativeImplicitsTokens->sphere,
+          { { _tokens->sphereTypeDef },
+            _tokens->sphereCommon,
+            { _tokens->sphereBounds },
             _tokens->sphereVertex,
-            _tokens->sphereFragment } }
+            { _tokens->sphereIntersection },
+            _tokens->sphereFragment } },
+        { HdStNativeImplicitsTokens->conicalFrustum,
+          { { _tokens->conicalTypeDef },
+            _tokens->conicalCommon,
+            { _tokens->conicalBounds },
+            _tokens->conicalVertex,
+            { _tokens->conicalIntersection },
+            _tokens->conicalFragment } },
+        { HdStNativeImplicitsTokens->capsule,
+          { { _tokens->conicalTypeDef,
+              _tokens->sphereTypeDef   },
+            _tokens->capsuleCommon,
+            { _tokens->sphereBounds },
+            _tokens->capsuleVertex,
+            { _tokens->conicalIntersection,
+              _tokens->sphereIntersection },
+            _tokens->capsuleFragment } },
     };
 
-    for (auto const &entry : shapeTable) {
-        if (entry.first == primType) {
-            return entry.second;
-        }
+    auto it = shapeMap.find(primType);
+    if (it == shapeMap.end()) {
+        TF_CODING_ERROR("Unsupported implicit surface prim type for Storm '%s'",
+                        primType.GetText());
+        static const _ShapeSections emptySections{};
+        return emptySections;
     }
 
-    TF_CODING_ERROR("Unsupported implicit surface prim type for Storm '%s'",
-                    primType.GetText());
-    static const _ShapeSections emptySections{};
-    return emptySections;
+    return it->second;
 }
 }
 
@@ -139,14 +183,25 @@ HdSt_ImplicitSurfaceShaderKey::HdSt_ImplicitSurfaceShaderKey(
     VS = { _tokens->instancing,
            _tokens->transformUtils,
            _tokens->depthUtils,
-           _tokens->typeDef,
-           _tokens->vertUtils,
-           shapeSections.typeDef,
-           shapeSections.bounds,
-           shapeSections.vertexGlue,
-           _tokens->mainVS,
-           _tokens->pointIdNoneVS,
-           TfToken() };
+           _tokens->commonConstants };
+
+    for (TfToken const &section : shapeSections.commonExtras) {
+        VS.push_back(section);
+    }
+
+    VS.push_back(shapeSections.common);
+
+    VS.push_back(_tokens->vertexTypeDef);
+    VS.push_back(_tokens->vertUtils);
+
+    for (TfToken const &section : shapeSections.vsExtras) {
+        VS.push_back(section);
+    }
+
+    VS.push_back(shapeSections.vertexGlue);
+    VS.push_back(_tokens->mainVS);
+    VS.push_back(_tokens->pointIdNoneVS);
+    VS.push_back(TfToken());
 
     FS = { _tokens->commonFS,
            _tokens->edgeIdNoneFS,
@@ -158,14 +213,24 @@ HdSt_ImplicitSurfaceShaderKey::HdSt_ImplicitSurfaceShaderKey(
            _tokens->instancing,
            _NormalsToken(doubleSided),
            _CullStyleToken(cullStyle, doubleSided),
-           _tokens->typeDef,
-           _tokens->fragUtils,
-           shapeSections.typeDef,
-           shapeSections.intersection,
-           shapeSections.fragmentGlue,
-           _tokens->mainFS,
-           _tokens->pointIdFallbackFS,
-           TfToken() };
+           _tokens->commonConstants };
+
+    for (TfToken const &section : shapeSections.commonExtras) {
+        FS.push_back(section);
+    }
+
+    FS.push_back(shapeSections.common);
+    FS.push_back(_tokens->fragmentTypeDef);
+    FS.push_back(_tokens->fragUtils);
+
+    for (TfToken const &section : shapeSections.fsExtras) {
+        FS.push_back(section);
+    }
+
+    FS.push_back(shapeSections.fragmentGlue);
+    FS.push_back(_tokens->mainFS);
+    FS.push_back(_tokens->pointIdFallbackFS);
+    FS.push_back(TfToken());
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

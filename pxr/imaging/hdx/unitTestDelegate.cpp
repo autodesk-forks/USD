@@ -811,9 +811,24 @@ Hdx_UnitTestDelegate::AddTet(SdfPath const &id, GfMatrix4d const &transform,
 }
 
 void
+Hdx_UnitTestDelegate::Remove(SdfPath const &id)
+{
+    GetRenderIndex().RemoveRprim(id);
+}
+
+void
 Hdx_UnitTestDelegate::SetRefineLevel(SdfPath const &id, int level)
 {
     _refineLevels[id] = level;
+    GetRenderIndex().GetChangeTracker().MarkRprimDirty(
+        id, HdChangeTracker::DirtyDisplayStyle);
+}
+
+void
+Hdx_UnitTestDelegate::SetDisplayInOverlay(
+    SdfPath const &id, bool displayInOverlay)
+{
+    _displayInOverlay[id] = displayInOverlay;
     GetRenderIndex().GetChangeTracker().MarkRprimDirty(
         id, HdChangeTracker::DirtyDisplayStyle);
 }
@@ -976,10 +991,20 @@ Hdx_UnitTestDelegate::GetInstancerTransform(SdfPath const& instancerId)
 HdDisplayStyle
 Hdx_UnitTestDelegate::GetDisplayStyle(SdfPath const& id)
 {
+    int refineLevel = _refineLevel;
     if (_refineLevels.find(id) != _refineLevels.end()) {
-        return HdDisplayStyle(_refineLevels[id]);
+        refineLevel = _refineLevels[id];
     }
-    return HdDisplayStyle(_refineLevel);
+
+    bool displayInOverlay = false;
+    if (_displayInOverlay.find(id) != _displayInOverlay.end()) {
+        displayInOverlay = _displayInOverlay[id];
+    }
+
+    return HdDisplayStyle(refineLevel,
+                          /*flatShading=*/false,
+                          /*displacement=*/true,
+                          displayInOverlay);
 }
 
 HdPrimvarDescriptorVector

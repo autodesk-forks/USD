@@ -164,7 +164,7 @@ public:
     const HdRenderSettingDescriptorList &GetRenderSettingDescriptorsForPlugin();
 
     HDST_API
-    static bool IsEnabledNativeSphereRenderingSupport();
+    static bool IsEnabledNativeImplicitsRenderingSupport();
     
 private:
     void _ApplyTextureSettings();

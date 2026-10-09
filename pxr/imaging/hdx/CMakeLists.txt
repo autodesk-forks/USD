@@ -106,7 +106,7 @@ pxr_library(hdx
         overview.dox
 )
 
-if (X11_FOUND OR APPLE)
+if (X11_FOUND OR APPLE OR WIN32)
 pxr_build_test(testHdxRenderTask
     LIBRARIES
         hdx
@@ -144,9 +144,7 @@ pxr_build_test(testHdxNoResourceBindings
     CPPFILES
         testenv/testHdxNoResourceBindings.cpp
 )
-endif()
 
-if (X11_FOUND)
 pxr_build_test(testHdxIdRender
     LIBRARIES
         hdx
@@ -165,7 +163,7 @@ pxr_build_test(testHdxCameraAndLight
         hdx
         hd
         sdf
-        glf
+        garch
         arch
         tf
     CPPFILES
@@ -227,20 +225,36 @@ pxr_build_test(testHdxPickResolveMode
         unitTestUtils.cpp
         testenv/testHdxPickResolveMode.cpp
 )
+pxr_build_test(testHdxPresentTask
+    LIBRARIES
+        hdx
+        hd
+        hdSt
+        sdf
+        glf
+        garch
+        arch
+        tf
+    CPPFILES
+        testenv/testHdxPresentTask.cpp
+)
+pxr_build_test(testHdxOitShaderRetention
+    LIBRARIES
+        hdx
+        hd
+        hdSt
+        sdf
+        glf
+        garch
+        arch
+        tf
+    CPPFILES
+        testenv/testHdxOitShaderRetention.cpp
+)
 endif()
 
 if (${PXR_HEADLESS_TEST_MODE})
     message(STATUS "Skipping ${PXR_PACKAGE} tests because PXR_HEADLESS_TEST_MODE is ON")
-    return()
-endif()
-
-if (APPLE)
-    message(STATUS "Skipping ${PXR_PACKAGE} tests because they are currently unsupported on macOS")
-    return()
-endif()
-
-if (WIN32)
-    message(STATUS "Skipping ${PXR_PACKAGE} tests because they are currently unsupported on Windows")
     return()
 endif()
 
@@ -259,6 +273,11 @@ pxr_register_test(testHdxIdRender
 )
 pxr_register_test(testHdxIdRender_Refined
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdxIdRender --offscreen --repr refined --refineLevel 2"
+    EXPECTED_RETURN_CODE 0
+)
+if (NOT APPLE)
+pxr_register_test(testHdxPresentTask
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdxPresentTask"
     EXPECTED_RETURN_CODE 0
 )
 pxr_register_test(testHdxLightAndShadow
@@ -282,6 +301,7 @@ pxr_register_test(testHdxPickResolveMode
     ENV
         TF_DEBUG="HDX_SELECTION_SETUP HD_SELECTION_UPDATE"
 )
+endif()
 pxr_register_test(testHdxPickTarget
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdxPickTarget --offscreen"
     TESTENV testenv/testHdxPickTarget
@@ -332,20 +352,6 @@ pxr_register_test(testHdxRenderTask
     ENV
         TF_DEBUG=HD_SAFE_MODE
 )
-
-pxr_build_test(testHdxOitShaderRetention
-    LIBRARIES
-        hdx
-        hd
-        hdSt
-        sdf
-        glf
-        garch
-        arch
-        tf
-    CPPFILES
-        testenv/testHdxOitShaderRetention.cpp
-)
 pxr_register_test(testHdxOitShaderRetention
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdxOitShaderRetention"
     EXPECTED_RETURN_CODE 0
@@ -381,12 +387,13 @@ pxr_build_test(testHdxDrawTarget
         hdx
         hd
         sdf
-        glf
+        garch
         arch
         tf
     CPPFILES
         testenv/testHdxDrawTarget.cpp
 )
+if (NOT APPLE)
 pxr_register_test(testHdxDrawTarget
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdxDrawTarget"
     TESTENV testenv/testHdxDrawTarget
@@ -399,6 +406,7 @@ pxr_register_test(testHdxDrawTarget
     ENV
         TF_DEBUG=HD_SAFE_MODE
 )
+endif()
 
 # testHdxPickAndHighlight needs SdrGlslfxParserPlugin
 pxr_build_test(testHdxPickAndHighlight
@@ -433,6 +441,30 @@ pxr_register_test(testHdxPickAndHighlight
     FAIL 1
     FAIL_PERCENT 1
     PERCEPTUAL
+)
+
+# testHdxPickTransparentOccluder needs SdrGlslfxParserPlugin
+pxr_build_test(testHdxPickTransparentOccluder
+    LIBRARIES
+        hdx
+        hd
+        hdSt
+        hio
+        sdr
+        sdf
+        glf
+        garch
+        arch
+        tf
+    CPPFILES
+        unitTestUtils.cpp
+        testenv/testHdxPickTransparentOccluder.cpp
+)
+pxr_register_test(testHdxPickTransparentOccluder
+    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdxPickTransparentOccluder --offscreen"
+    EXPECTED_RETURN_CODE 0
+    ENV
+        TF_DEBUG="HDX_SELECTION_SETUP HD_SELECTION_UPDATE"
 )
 
 endif() # TARGET shared_libs

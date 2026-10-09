@@ -7,12 +7,7 @@
 #ifndef PXR_IMAGING_HD_ST_SPHERE_H
 #define PXR_IMAGING_HD_ST_SPHERE_H
 
-#include "pxr/pxr.h"
-#include "pxr/imaging/hdSt/api.h"
-#include "pxr/imaging/hd/version.h"
 #include "pxr/imaging/hdSt/implicitSurface.h"
-
-#include "pxr/usd/sdf/path.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 

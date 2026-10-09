@@ -889,10 +889,11 @@ UsdStage::UsdStage(const SdfLayerRefPtr& rootLayer,
     , _sessionLayer(sessionLayer)
     , _editTarget(_rootLayer)
     , _editTargetIsLocalLayer(true)
-    , _cache(new PcpCache(PcpLayerStackIdentifier(
-                              _rootLayer, _sessionLayer, pathResolverContext),
-                          /*fileFormatTarget=*/std::string(),
-                          /*usdMode=*/true))
+    , _cache(new PcpCache(
+            PcpLayerStackIdentifier(
+                _rootLayer, _sessionLayer, pathResolverContext),
+            /*fileFormatTarget=*/_rootLayer->GetFileFormat()->GetTarget(),
+            /*usdMode=*/true))
     , _clipCache(new Usd_ClipCache)
     , _instanceCache(new Usd_InstanceCache)
     , _usedLayersRevision(0)
@@ -5803,8 +5804,8 @@ _CopyPrim(const UsdPrim &usdPrim,
             prototypeToFlattened.at(usdPrim.GetPrototype().GetPath());
 
         // Author an internal reference to our flattened prototype prim
-        newPrim->GetReferenceList().Add(SdfReference(std::string(),
-                                        flattenedPrototypePath));
+        newPrim->GetReferenceList()
+            .Append(SdfReference(std::string(), flattenedPrototypePath));
     }
     
     _CopyAuthoredMetadata(usdPrim, newPrim);

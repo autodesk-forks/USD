@@ -28,7 +28,8 @@ TF_REGISTRY_FUNCTION(TfType)
 
 TF_REGISTRY_FUNCTION(HdSceneIndexPlugin)
 {
-    const HdSceneIndexPluginRegistry::InsertionPhase insertionPhase = 0;
+    // HdGpSceneIndexPlugin::GetInsertionPhase() + 1 = 3
+    const HdSceneIndexPluginRegistry::InsertionPhase insertionPhase = 3;
 
     HdSceneIndexPluginRegistry::GetInstance().RegisterSceneIndexForRenderer(
         _pluginDisplayName,
@@ -51,22 +52,22 @@ const HdContainerDataSourceHandle _LocalInputArgs()
 {
     // Configure the scene index to generate meshes for implicit primitives
     // that are not natively supported by Storm. With
-    // HDST_ENABLE_NATIVE_SPHERES enabled, spheres can be rendered natively,
-    // so we avoid converting them to meshes here.
+    // HDST_ENABLE_NATIVE_IMPLICITS enabled, spheres, cones, and cylinders
+    // can be rendered natively, so we avoid converting them to meshes here.
     HdDataSourceBaseHandle const toMeshSrc =
     HdRetainedTypedSampledDataSource<TfToken>::New(
         HdsiImplicitSurfaceSceneIndexTokens->toMesh);
-    
+
     TfTokenVector names = {
         HdPrimTypeTokens->cube,
-        HdPrimTypeTokens->cone,
-        HdPrimTypeTokens->cylinder,
-        HdPrimTypeTokens->capsule,
         HdPrimTypeTokens->plane
     };
 
-    if (!HdStRenderDelegate::IsEnabledNativeSphereRenderingSupport()) {
+    if (!HdStRenderDelegate::IsEnabledNativeImplicitsRenderingSupport()) {
         names.emplace_back(HdPrimTypeTokens->sphere);
+        names.emplace_back(HdPrimTypeTokens->cone);
+        names.emplace_back(HdPrimTypeTokens->cylinder);
+        names.emplace_back(HdPrimTypeTokens->capsule);
     }
 
     std::vector<HdDataSourceBaseHandle> values(names.size(), toMeshSrc);

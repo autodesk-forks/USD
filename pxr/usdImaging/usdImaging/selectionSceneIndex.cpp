@@ -6,6 +6,8 @@
 //
 #include "pxr/usdImaging/usdImaging/selectionSceneIndex.h"
 
+#include "pxr/usd/usdHydra/tokens.h"
+
 #include "pxr/usdImaging/usdImaging/debugCodes.h"
 #include "pxr/usdImaging/usdImaging/tokens.h"
 #include "pxr/usdImaging/usdImaging/usdPrimInfoSchema.h"
@@ -24,6 +26,7 @@
 
 #include "pxr/usd/sdf/path.h"
 
+#include "pxr/base/tf/scopeDescription.h"
 #include "pxr/base/trace/trace.h"
 #include "pxr/base/vt/types.h"
 #include "pxr/base/work/loops.h"
@@ -824,6 +827,14 @@ _ComputeSceneIndexPrimsAndInstanceIndices(
     return result;
 }
 
+bool
+_IsGenerativeProcedural(const HdSceneIndexPrim& prim)
+{
+    // Technically, generative procedurals do not need to have this type.
+    // The generativeProceduralResolvingSceneIndex can be configured to
+    // look for specific types.
+    return prim.primType == UsdHydraTokens->hydraGenerativeProcedural;
+}
 
 struct _Node
 {
@@ -833,7 +844,7 @@ struct _Node
     SdfPath niInstancer;
     int niPrototypeIndex = 0;
     VtIntArray niInstanceIndices;
-    bool isGprim = false;
+    bool supportsSelection = false;
     std::vector<_PrimAndNestedInstanceIndices> piPropagatedSeeds;
     SdfPathVector childPrims;
     size_t childBegin = 0;
@@ -894,7 +905,8 @@ _ClassifyNodes(
                 primAndNestedInstanceIndices,
                 &node.piPropagatedSeeds);
 
-            node.isGprim = HdPrimTypeIsGprim(prim.primType);
+            node.supportsSelection = HdPrimTypeIsGprim(prim.primType) ||
+                _IsGenerativeProcedural(prim);
         }
 
         node.childPrims = sceneIndex->GetChildPrimPaths(node.prim);
@@ -1024,7 +1036,7 @@ _ExpandToDescendants(
                 seeds.push_back(std::move(piPropagatedSeed));
             }
 
-            if (node.isGprim) {
+            if (node.supportsSelection) {
                 _PrimAndNestedInstanceIndices
                     primAndNestedInstanceIndices = seed;
                 primAndNestedInstanceIndices.prim = std::move(node.prim);
@@ -1104,6 +1116,8 @@ UsdImagingSelectionSceneIndex::AddSelection(
     const SdfPath &usdPath)
 {
     TRACE_FUNCTION();
+
+    TF_DESCRIBE_SCOPE("Selecting prims under %s", usdPath.GetText());
 
     TF_DEBUG(USDIMAGING_SELECTION).Msg(
         "UsdImagingSelectionSceneInedx::AddSelection(usdPath = %s)\n",
