@@ -211,8 +211,8 @@ HgiMetalResourceBindings::BindResources(
     id<MTLBuffer> argBuffer)
 {
     id<MTLArgumentEncoder> argEncoderBuffer = hgi->GetBufferArgumentEncoder();
-    id<MTLArgumentEncoder> argEncoderSampler;
-    id<MTLArgumentEncoder> argEncoderTexture;
+    id<MTLArgumentEncoder> argEncoderSampler = hgi->GetSamplerArgumentEncoder();
+    id<MTLArgumentEncoder> argEncoderTexture = hgi->GetTextureArgumentEncoder();
 
     //
     // Bind Textures and Samplers
