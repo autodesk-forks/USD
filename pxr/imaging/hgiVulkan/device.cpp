@@ -64,6 +64,11 @@ _SupportsPresentation(
                     physicalDevice, familyIndex);
 #elif defined(VK_USE_PLATFORM_XLIB_KHR)
         Display* dsp = XOpenDisplay(nullptr);
+        // Headless (offscreen) use has no display, so there is nothing to present to. Don't
+        // reject the device for presentation support, and don't dereference the null display.
+        if (!dsp) {
+            return true;
+        }
         VisualID visualID = XVisualIDFromVisual(
             DefaultVisual(dsp, DefaultScreen(dsp)));
         return vkGetPhysicalDeviceXlibPresentationSupportKHR(

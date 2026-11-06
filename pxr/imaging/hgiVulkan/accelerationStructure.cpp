@@ -164,13 +164,19 @@ HgiVulkanAccelerationStructure::HgiVulkanAccelerationStructure(
     scratchBufferDesc.debugName = _descriptor.debugName + "ScratchBuffer";
     scratchBufferDesc.usage = HgiBufferUsageStorage | HgiBufferUsageRayTracingExtensions | HgiBufferUsageShaderDeviceAddress;
     scratchBufferDesc.initialData = nullptr;
-    scratchBufferDesc.byteSize = _buildSizesInfo.buildScratchSize;
+    // The scratch address must be a multiple of minAccelerationStructureScratchOffsetAlignment
+    // (at most 256), but the allocator only honors the buffer's own alignment, which can be
+    // smaller. A misaligned scratch address gives an undefined (often empty) acceleration
+    // structure, so over-allocate and align the address by hand.
+    const VkDeviceSize scratchAlignment = 256;
+    scratchBufferDesc.byteSize = _buildSizesInfo.buildScratchSize + scratchAlignment;
     _scratchBuffer = pHgi->CreateBuffer(scratchBufferDesc);
     HgiVulkanBuffer* pScratchBufferVk = (HgiVulkanBuffer*)_scratchBuffer.Get();
 
     _buildGeomInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
     _buildGeomInfo.dstAccelerationStructure = _accelerationStructure;
-    _buildGeomInfo.scratchData.deviceAddress = pScratchBufferVk->GetDeviceAddress();
+    _buildGeomInfo.scratchData.deviceAddress =
+        (pScratchBufferVk->GetDeviceAddress() + scratchAlignment - 1) & ~(scratchAlignment - 1);
 }
 
 HgiVulkanAccelerationStructure::~HgiVulkanAccelerationStructure() {
